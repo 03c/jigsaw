@@ -16,6 +16,7 @@ REPO_URL="https://github.com/03c/jigsaw.git"
 INSTALL_DIR="/opt/jigsaw"
 PANEL_IMAGE="ghcr.io/03c/jigsaw/panel:latest"
 PHP_IMAGE="ghcr.io/03c/jigsaw/php:8.4"
+SKIP_DNS_CHECK="${SKIP_DNS_CHECK:-0}"
 
 EXISTING_POSTGRES_PASSWORD=""
 EXISTING_SESSION_SECRET=""
@@ -56,6 +57,11 @@ resolve_ipv4_public() {
   curl -fsS "https://cloudflare-dns.com/dns-query?name=${host}&type=A" \
     -H 'accept: application/dns-json' 2>/dev/null \
     | sed -n 's/.*"data":"\([0-9][0-9.]*\)".*/\1/p' | head -n1
+}
+
+is_private_or_loopback_ipv4() {
+  local ip="$1"
+  [[ "$ip" == 127.* || "$ip" == 10.* || "$ip" == 192.168.* || "$ip" == 169.254.* || "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\..* ]]
 }
 
 wait_for_valid_cert() {
@@ -265,42 +271,54 @@ ok "Secrets:          auto-generated"
 echo ""
 
 # Verify DNS before continuing so Let's Encrypt can succeed
-SERVER_PUBLIC_IP="$(curl -4 -sf https://ifconfig.me 2>/dev/null || curl -4 -sf https://api.ipify.org 2>/dev/null || true)"
-if [[ -n "$SERVER_PUBLIC_IP" ]]; then
-  PANEL_DOMAIN_IP="$(resolve_ipv4_public "$PANEL_DOMAIN" || true)"
-  AUTH_DOMAIN="auth.${PANEL_DOMAIN}"
-  AUTH_DOMAIN_IP="$(resolve_ipv4_public "$AUTH_DOMAIN" || true)"
-
-  # Fallback to local resolver only if public DNS lookup is unavailable
-  if [[ -z "$PANEL_DOMAIN_IP" ]]; then
-    warn "Could not query public DNS for ${PANEL_DOMAIN}; falling back to local resolver."
-    PANEL_DOMAIN_IP="$(resolve_ipv4 "$PANEL_DOMAIN" || true)"
-  fi
-
-  if [[ -z "$AUTH_DOMAIN_IP" ]]; then
-    warn "Could not query public DNS for ${AUTH_DOMAIN}; falling back to local resolver."
-    AUTH_DOMAIN_IP="$(resolve_ipv4 "$AUTH_DOMAIN" || true)"
-  fi
-
-  if [[ -z "$PANEL_DOMAIN_IP" ]]; then
-    fatal "DNS lookup failed for ${PANEL_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
-  fi
-
-  if [[ -z "$AUTH_DOMAIN_IP" ]]; then
-    fatal "DNS lookup failed for ${AUTH_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
-  fi
-
-  if [[ "$PANEL_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
-    fatal "Public DNS for ${PANEL_DOMAIN} resolves to ${PANEL_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
-  fi
-
-  if [[ "$AUTH_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
-    fatal "Public DNS for ${AUTH_DOMAIN} resolves to ${AUTH_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
-  fi
-
-  ok "DNS looks good for panel and auth domains"
+if [[ "$SKIP_DNS_CHECK" == "1" ]]; then
+  warn "Skipping DNS pre-check (SKIP_DNS_CHECK=1)."
 else
-  warn "Could not detect server public IPv4 automatically. Skipping DNS pre-check."
+  SERVER_PUBLIC_IP="$(curl -4 -sf https://ifconfig.me 2>/dev/null || curl -4 -sf https://api.ipify.org 2>/dev/null || true)"
+  if [[ -n "$SERVER_PUBLIC_IP" ]]; then
+    PANEL_DOMAIN_IP="$(resolve_ipv4_public "$PANEL_DOMAIN" || true)"
+    AUTH_DOMAIN="auth.${PANEL_DOMAIN}"
+    AUTH_DOMAIN_IP="$(resolve_ipv4_public "$AUTH_DOMAIN" || true)"
+    PANEL_USED_LOCAL_RESOLVER=0
+    AUTH_USED_LOCAL_RESOLVER=0
+
+    # Fallback to local resolver only if public DNS lookup is unavailable
+    if [[ -z "$PANEL_DOMAIN_IP" ]]; then
+      warn "Could not query public DNS for ${PANEL_DOMAIN}; falling back to local resolver."
+      PANEL_DOMAIN_IP="$(resolve_ipv4 "$PANEL_DOMAIN" || true)"
+      PANEL_USED_LOCAL_RESOLVER=1
+    fi
+
+    if [[ -z "$AUTH_DOMAIN_IP" ]]; then
+      warn "Could not query public DNS for ${AUTH_DOMAIN}; falling back to local resolver."
+      AUTH_DOMAIN_IP="$(resolve_ipv4 "$AUTH_DOMAIN" || true)"
+      AUTH_USED_LOCAL_RESOLVER=1
+    fi
+
+    if [[ -z "$PANEL_DOMAIN_IP" ]]; then
+      fatal "DNS lookup failed for ${PANEL_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
+    fi
+
+    if [[ -z "$AUTH_DOMAIN_IP" ]]; then
+      fatal "DNS lookup failed for ${AUTH_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
+    fi
+
+    if [[ $PANEL_USED_LOCAL_RESOLVER -eq 1 ]] && is_private_or_loopback_ipv4 "$PANEL_DOMAIN_IP"; then
+      warn "Local resolver returned ${PANEL_DOMAIN_IP} for ${PANEL_DOMAIN}; skipping strict panel DNS check."
+    elif [[ "$PANEL_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
+      fatal "Public DNS for ${PANEL_DOMAIN} resolves to ${PANEL_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+    fi
+
+    if [[ $AUTH_USED_LOCAL_RESOLVER -eq 1 ]] && is_private_or_loopback_ipv4 "$AUTH_DOMAIN_IP"; then
+      warn "Local resolver returned ${AUTH_DOMAIN_IP} for ${AUTH_DOMAIN}; skipping strict auth DNS check."
+    elif [[ "$AUTH_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
+      fatal "Public DNS for ${AUTH_DOMAIN} resolves to ${AUTH_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+    fi
+
+    ok "DNS looks good for panel and auth domains"
+  else
+    warn "Could not detect server public IPv4 automatically. Skipping DNS pre-check."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
