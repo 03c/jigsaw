@@ -6,7 +6,7 @@ set -euo pipefail
 # ===========================================
 #
 # Usage (fresh server):
-#   bash <(curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh)
+#   curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh -o /tmp/jigsaw-install.sh && chmod +x /tmp/jigsaw-install.sh && sudo /tmp/jigsaw-install.sh
 #
 # Usage (already cloned):
 #   chmod +x install.sh && ./install.sh
