@@ -52,7 +52,7 @@ prompt() {
       [[ -z "$value" ]] && warn "This field is required."
     done
   fi
-  eval "$var_name=\"$value\""
+  printf -v "$var_name" '%s' "$value"
 }
 
 prompt_secret() {
@@ -69,7 +69,7 @@ prompt_secret() {
       [[ -z "$value" ]] && warn "This field is required."
     done
   fi
-  eval "$var_name=\"$value\""
+  printf -v "$var_name" '%s' "$value"
 }
 
 # ---------------------------------------------------------------------------
