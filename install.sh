@@ -47,6 +47,28 @@ generate_hex() {
   openssl rand -hex "${1:-32}"
 }
 
+resolve_ipv4() {
+  local host="$1"
+  getent ahostsv4 "$host" 2>/dev/null | cut -d' ' -f1 | head -n1
+}
+
+wait_for_valid_cert() {
+  local host="$1"
+  local waited=0
+  local max_wait=420
+
+  info "Waiting for valid SSL certificate for ${host}..."
+  until curl -fsSI --max-time 10 "https://${host}" >/dev/null 2>&1; do
+    sleep 10
+    waited=$((waited + 10))
+    if [[ $waited -ge $max_wait ]]; then
+      fatal "Timed out waiting for a valid certificate on https://${host}. Check DNS and: docker compose logs traefik"
+    fi
+  done
+
+  ok "Valid SSL certificate active: https://${host}"
+}
+
 prompt() {
   local var_name="$1" prompt_text="$2" default="${3:-}"
   local value
@@ -239,6 +261,34 @@ ok "Admin email:      $ADMIN_EMAIL"
 ok "Secrets:          auto-generated"
 echo ""
 
+# Verify DNS before continuing so Let's Encrypt can succeed
+SERVER_PUBLIC_IP="$(curl -4 -sf https://ifconfig.me 2>/dev/null || curl -4 -sf https://api.ipify.org 2>/dev/null || true)"
+if [[ -n "$SERVER_PUBLIC_IP" ]]; then
+  PANEL_DOMAIN_IP="$(resolve_ipv4 "$PANEL_DOMAIN" || true)"
+  AUTH_DOMAIN="auth.${PANEL_DOMAIN}"
+  AUTH_DOMAIN_IP="$(resolve_ipv4 "$AUTH_DOMAIN" || true)"
+
+  if [[ -z "$PANEL_DOMAIN_IP" ]]; then
+    fatal "DNS lookup failed for ${PANEL_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
+  fi
+
+  if [[ -z "$AUTH_DOMAIN_IP" ]]; then
+    fatal "DNS lookup failed for ${AUTH_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
+  fi
+
+  if [[ "$PANEL_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
+    fatal "${PANEL_DOMAIN} resolves to ${PANEL_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+  fi
+
+  if [[ "$AUTH_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
+    fatal "${AUTH_DOMAIN} resolves to ${AUTH_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+  fi
+
+  ok "DNS looks good for panel and auth domains"
+else
+  warn "Could not detect server public IPv4 automatically. Skipping DNS pre-check."
+fi
+
 # ---------------------------------------------------------------------------
 # Step 4: Write .env
 # ---------------------------------------------------------------------------
@@ -368,6 +418,12 @@ ok "Keycloak is ready"
 info "Running database migrations..."
 docker compose exec -T -e npm_config_update_notifier=false jigsaw npm run db:push
 ok "Database schema created"
+
+# ---------------------------------------------------------------------------
+# Step 11: Confirm TLS certificates are valid
+# ---------------------------------------------------------------------------
+wait_for_valid_cert "$PANEL_DOMAIN"
+wait_for_valid_cert "auth.${PANEL_DOMAIN}"
 
 # ---------------------------------------------------------------------------
 # Done!

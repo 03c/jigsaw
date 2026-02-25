@@ -33,7 +33,7 @@ The installer will:
 5. Pull prebuilt panel and PHP images from GHCR
 6. Start the full stack (Traefik, PostgreSQL, Keycloak, Jigsaw panel)
 7. Run database migrations
-8. Print your panel URL and first-login instructions
+8. Validate DNS, wait for valid Let's Encrypt certificates, then print first-login instructions
 
 If you've already cloned the repo, run the script directly:
 
@@ -124,6 +124,8 @@ If Traefik logs `client version 1.24 is too old. Minimum supported API version i
 ```bash
 git pull && docker compose down && docker compose up -d
 ```
+
+If install times out waiting for SSL certificates, verify both domains resolve to this server and that ports 80/443 are reachable from the internet.
 
 If `/auth/login` returns `Unexpected Server Error` or `Authentication is temporarily unavailable`, Keycloak is not ready from the panel container yet. Check:
 
