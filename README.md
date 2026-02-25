@@ -125,6 +125,19 @@ If Traefik logs `client version 1.24 is too old. Minimum supported API version i
 git pull && docker compose down && docker compose up -d
 ```
 
+If `/auth/login` returns `Unexpected Server Error` or `Authentication is temporarily unavailable`, Keycloak is not ready from the panel container yet. Check:
+
+```bash
+docker compose logs -f keycloak jigsaw
+docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/jigsaw/.well-known/openid-configuration').then((r)=>r.text().then((t)=>console.log(r.status,t.slice(0,120)))).catch((e)=>{console.error(e);process.exit(1)})"
+```
+
+If logs include `OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED` with issuer mismatch (`expected http://keycloak:8080/...` vs `issuer https://auth.<domain>/...`), pull the latest config and recreate the panel:
+
+```bash
+git pull && docker compose up -d --force-recreate jigsaw
+```
+
 ## Architecture
 
 ```

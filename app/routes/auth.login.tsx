@@ -18,11 +18,19 @@ export async function loader({ request }: { request: Request }) {
   session.set("oauth_state", state);
   session.set("oauth_code_verifier", codeVerifier);
 
-  const authUrl = await getAuthorizationUrl(redirectUri, state, codeVerifier);
+  try {
+    const authUrl = await getAuthorizationUrl(redirectUri, state, codeVerifier);
 
-  return redirect(authUrl, {
-    headers: {
-      "Set-Cookie": await commitSession(session),
-    },
-  });
+    return redirect(authUrl, {
+      headers: {
+        "Set-Cookie": await commitSession(session),
+      },
+    });
+  } catch (err) {
+    console.error("OAuth login initialization error:", err);
+    return new Response(
+      "Authentication is temporarily unavailable. Keycloak may still be starting. Please try again in 30 seconds.",
+      { status: 503 }
+    );
+  }
 }

@@ -4,25 +4,27 @@ let _config: client.Configuration | null = null;
 
 /**
  * Get or initialize the OpenID Connect client configuration.
- * Uses the internal Keycloak URL for server-to-server communication.
  */
 async function getOIDCConfig(): Promise<client.Configuration> {
   if (_config) return _config;
 
   const issuerUrl =
+    process.env.KEYCLOAK_PUBLIC_URL ||
     process.env.KEYCLOAK_ISSUER_URL ||
-    "http://keycloak:8080/realms/jigsaw";
+    "https://auth.localhost/realms/jigsaw";
   const clientId = process.env.KEYCLOAK_CLIENT_ID || "jigsaw-panel";
   const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET || "";
+
+  const execute = issuerUrl.startsWith("http://")
+    ? [client.allowInsecureRequests]
+    : undefined;
 
   _config = await client.discovery(
     new URL(issuerUrl),
     clientId,
     clientSecret,
     undefined,
-    {
-      execute: [client.allowInsecureRequests],
-    }
+    execute ? { execute } : undefined
   );
 
   return _config;
@@ -30,7 +32,6 @@ async function getOIDCConfig(): Promise<client.Configuration> {
 
 /**
  * Build the Keycloak authorization URL for the browser to redirect to.
- * Uses the PUBLIC Keycloak URL since the browser needs to reach it.
  */
 export async function getAuthorizationUrl(
   redirectUri: string,
@@ -48,10 +49,10 @@ export async function getAuthorizationUrl(
     code_challenge_method: "S256",
   });
 
-  // Build the URL using the internal config, then rewrite to public URL
+  // Build the URL from OIDC discovery config
   const authUrl = client.buildAuthorizationUrl(config, params);
 
-  // Replace the internal Keycloak host with the public one
+  // Keep compatibility if an internal issuer URL is still used.
   const publicKeycloakUrl =
     process.env.KEYCLOAK_PUBLIC_URL ||
     process.env.KEYCLOAK_ISSUER_URL ||

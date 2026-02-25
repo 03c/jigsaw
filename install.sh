@@ -350,7 +350,7 @@ ok "PostgreSQL is ready"
 info "Waiting for Keycloak to start (this can take 30-60s on first boot)..."
 WAITED=0
 MAX_WAIT=300
-until docker compose exec -T keycloak bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' &>/dev/null; do
+until docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/jigsaw/.well-known/openid-configuration').then((r)=>process.exit(r.ok ? 0 : 1)).catch(()=>process.exit(1))" &>/dev/null; do
   sleep 5
   WAITED=$((WAITED + 5))
   if [[ $WAITED -ge $MAX_WAIT ]]; then
