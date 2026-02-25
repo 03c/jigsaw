@@ -51,6 +51,13 @@ resolve_ipv4() {
   getent ahostsv4 "$host" 2>/dev/null | cut -d' ' -f1 | head -n1
 }
 
+resolve_ipv4_public() {
+  local host="$1"
+  curl -fsS "https://cloudflare-dns.com/dns-query?name=${host}&type=A" \
+    -H 'accept: application/dns-json' 2>/dev/null \
+    | sed -n 's/.*"data":"\([0-9][0-9.]*\)".*/\1/p' | head -n1
+}
+
 wait_for_valid_cert() {
   local host="$1"
   local waited=0
@@ -260,9 +267,20 @@ echo ""
 # Verify DNS before continuing so Let's Encrypt can succeed
 SERVER_PUBLIC_IP="$(curl -4 -sf https://ifconfig.me 2>/dev/null || curl -4 -sf https://api.ipify.org 2>/dev/null || true)"
 if [[ -n "$SERVER_PUBLIC_IP" ]]; then
-  PANEL_DOMAIN_IP="$(resolve_ipv4 "$PANEL_DOMAIN" || true)"
+  PANEL_DOMAIN_IP="$(resolve_ipv4_public "$PANEL_DOMAIN" || true)"
   AUTH_DOMAIN="auth.${PANEL_DOMAIN}"
-  AUTH_DOMAIN_IP="$(resolve_ipv4 "$AUTH_DOMAIN" || true)"
+  AUTH_DOMAIN_IP="$(resolve_ipv4_public "$AUTH_DOMAIN" || true)"
+
+  # Fallback to local resolver only if public DNS lookup is unavailable
+  if [[ -z "$PANEL_DOMAIN_IP" ]]; then
+    warn "Could not query public DNS for ${PANEL_DOMAIN}; falling back to local resolver."
+    PANEL_DOMAIN_IP="$(resolve_ipv4 "$PANEL_DOMAIN" || true)"
+  fi
+
+  if [[ -z "$AUTH_DOMAIN_IP" ]]; then
+    warn "Could not query public DNS for ${AUTH_DOMAIN}; falling back to local resolver."
+    AUTH_DOMAIN_IP="$(resolve_ipv4 "$AUTH_DOMAIN" || true)"
+  fi
 
   if [[ -z "$PANEL_DOMAIN_IP" ]]; then
     fatal "DNS lookup failed for ${PANEL_DOMAIN}. Create an A record to ${SERVER_PUBLIC_IP} before install."
@@ -273,11 +291,11 @@ if [[ -n "$SERVER_PUBLIC_IP" ]]; then
   fi
 
   if [[ "$PANEL_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
-    fatal "${PANEL_DOMAIN} resolves to ${PANEL_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+    fatal "Public DNS for ${PANEL_DOMAIN} resolves to ${PANEL_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
   fi
 
   if [[ "$AUTH_DOMAIN_IP" != "$SERVER_PUBLIC_IP" ]]; then
-    fatal "${AUTH_DOMAIN} resolves to ${AUTH_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
+    fatal "Public DNS for ${AUTH_DOMAIN} resolves to ${AUTH_DOMAIN_IP}, expected ${SERVER_PUBLIC_IP}. Fix DNS before install."
   fi
 
   ok "DNS looks good for panel and auth domains"
