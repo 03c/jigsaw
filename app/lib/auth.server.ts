@@ -80,6 +80,8 @@ export async function exchangeCode(
   const tokens = await client.authorizationCodeGrant(config, currentUrl, {
     pkceCodeVerifier: codeVerifier,
     expectedState,
+  }, {
+    redirect_uri: redirectUri,
   });
 
   return tokens;
