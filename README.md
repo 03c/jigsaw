@@ -168,7 +168,6 @@ All configuration is in the `.env` file. See [`.env.example`](.env.example) for 
 |----------|-------------|
 | `PANEL_DOMAIN` | Domain for the panel (Keycloak is at `auth.<domain>`) |
 | `ACME_EMAIL` | Email for Let's Encrypt certificate notifications |
-| `JIGSAW_PANEL_IMAGE` | Panel image to run (default `ghcr.io/03c/jigsaw/panel:latest`) |
 | `POSTGRES_PASSWORD` | PostgreSQL password (auto-generated) |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password |
 | `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel |

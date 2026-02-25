@@ -99,7 +99,7 @@ services:
   # Jigsaw Panel - React Router 7 Application
   # ===========================================
   jigsaw:
-    image: ${JIGSAW_PANEL_IMAGE:-ghcr.io/03c/jigsaw/panel:latest}
+    image: ghcr.io/03c/jigsaw/panel:latest
     pull_policy: always
     container_name: jigsaw_panel
     restart: unless-stopped
