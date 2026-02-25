@@ -37,6 +37,7 @@ services:
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${PANEL_DOMAIN}`)"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
 
   # ===========================================
   # PostgreSQL - Shared database
@@ -93,6 +94,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.keycloak.rule=Host(`auth.${PANEL_DOMAIN}`)"
       - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.routers.keycloak.tls.certresolver=letsencrypt"
       - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
 
   # ===========================================
