@@ -1,0 +1,142 @@
+services:
+  # ===========================================
+  # Traefik - Reverse Proxy & SSL Termination
+  # ===========================================
+  traefik:
+    image: traefik:v3.4
+    container_name: jigsaw_traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik_public"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP -> HTTPS redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # Let's Encrypt
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - traefik_public
+    labels:
+      # Traefik dashboard (admin only, protected by Keycloak)
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${PANEL_DOMAIN}`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+
+  # ===========================================
+  # PostgreSQL - Shared database
+  # ===========================================
+  postgres:
+    image: postgres:17-alpine
+    container_name: jigsaw_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jigsaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jigsaw_secret}
+      POSTGRES_DB: jigsaw
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./docker/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql
+    networks:
+      - jigsaw_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jigsaw}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Keycloak - Identity & Access Management
+  # ===========================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: jigsaw_keycloak
+    restart: unless-stopped
+    command: start --import-realm
+    environment:
+      # Admin console credentials
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Database
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-jigsaw}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-jigsaw_secret}
+      # Proxy settings (behind Traefik)
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "https://auth.${PANEL_DOMAIN}"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+    networks:
+      - jigsaw_internal
+      - traefik_public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`auth.${PANEL_DOMAIN}`)"
+      - "traefik.http.routers.keycloak.tls.certresolver=letsencrypt"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+
+  # ===========================================
+  # Jigsaw Panel - React Router 7 Application
+  # ===========================================
+  jigsaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jigsaw_panel
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-jigsaw}:${POSTGRES_PASSWORD:-jigsaw_secret}@postgres:5432/jigsaw
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/jigsaw
+      KEYCLOAK_PUBLIC_URL: https://auth.${PANEL_DOMAIN}/realms/jigsaw
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-jigsaw-panel}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      PANEL_URL: https://${PANEL_DOMAIN}
+      SESSION_SECRET: ${SESSION_SECRET}
+      NODE_ENV: production
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/sites:/app/data/sites
+      - ./data/databases:/app/data/databases
+      - ./docker/compose:/app/docker/compose
+      - ./docker/templates:/app/docker/templates
+    networks:
+      - jigsaw_internal
+      - traefik_public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jigsaw.rule=Host(`${PANEL_DOMAIN}`)"
+      - "traefik.http.routers.jigsaw.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jigsaw.loadbalancer.server.port=3000"
+
+networks:
+  traefik_public:
+    name: traefik_public
+    driver: bridge
+  jigsaw_internal:
+    name: jigsaw_internal
+    driver: bridge
+
+volumes:
+  traefik_letsencrypt:

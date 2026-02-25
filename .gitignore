@@ -5,3 +5,17 @@
 # React Router
 /.react-router/
 /build/
+
+# Data directories (persistent volumes, not committed)
+/data/sites/
+/data/databases/
+/data/postgres/
+
+# Generated compose files
+/docker/compose/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
