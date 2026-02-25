@@ -15,6 +15,10 @@ set -euo pipefail
 REPO_URL="https://github.com/03c/jigsaw.git"
 INSTALL_DIR="/opt/jigsaw"
 
+EXISTING_POSTGRES_PASSWORD=""
+EXISTING_SESSION_SECRET=""
+EXISTING_KEYCLOAK_CLIENT_SECRET=""
+
 # Colours
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -201,15 +205,22 @@ info "We need a few details to set up your panel."
 info "Secrets will be auto-generated where possible."
 echo ""
 
+if [[ -f .env ]]; then
+  info "Existing .env detected, preserving previously generated secrets."
+  EXISTING_POSTGRES_PASSWORD=$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n1)
+  EXISTING_SESSION_SECRET=$(sed -n 's/^SESSION_SECRET=//p' .env | head -n1)
+  EXISTING_KEYCLOAK_CLIENT_SECRET=$(sed -n 's/^KEYCLOAK_CLIENT_SECRET=//p' .env | head -n1)
+fi
+
 prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)"
 prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates"
 prompt       ADMIN_EMAIL    "Admin user email address" "${ACME_EMAIL:-}"
 prompt_secret KC_ADMIN_PASS "Keycloak admin console password"
 
 # Auto-generate secrets
-POSTGRES_PASSWORD=$(generate_password 32)
-SESSION_SECRET=$(generate_hex 32)
-KEYCLOAK_CLIENT_SECRET=$(generate_password 48)
+POSTGRES_PASSWORD=${EXISTING_POSTGRES_PASSWORD:-$(generate_password 32)}
+SESSION_SECRET=${EXISTING_SESSION_SECRET:-$(generate_hex 32)}
+KEYCLOAK_CLIENT_SECRET=${EXISTING_KEYCLOAK_CLIENT_SECRET:-$(generate_password 48)}
 
 echo ""
 ok "Domain:           $PANEL_DOMAIN"
@@ -328,7 +339,7 @@ ok "Keycloak is ready"
 # Step 10: Run database migrations
 # ---------------------------------------------------------------------------
 info "Running database migrations..."
-docker compose exec -T jigsaw npm run db:push 2>&1 | tail -5
+docker compose exec -T jigsaw_panel npm run db:push
 ok "Database schema created"
 
 # ---------------------------------------------------------------------------
