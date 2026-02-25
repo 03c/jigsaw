@@ -175,7 +175,7 @@ echo ""
 
 prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)"
 prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates"
-prompt       ADMIN_EMAIL    "Admin user email address" "$ACME_EMAIL"
+prompt       ADMIN_EMAIL    "Admin user email address" "${ACME_EMAIL:-}"
 prompt_secret KC_ADMIN_PASS "Keycloak admin console password"
 
 # Auto-generate secrets
