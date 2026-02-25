@@ -216,8 +216,8 @@ if [[ -d "data/postgres" && -z "$EXISTING_POSTGRES_PASSWORD" ]]; then
   fatal "Detected existing PostgreSQL data at data/postgres but no POSTGRES_PASSWORD in .env. Restore the original .env or reset PostgreSQL data: docker compose down && rm -rf data/postgres"
 fi
 
-prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)"
-prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates"
+prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)" "server.jigsawhost.com"
+prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates" "chris.child@gmail.com"
 prompt       ADMIN_EMAIL    "Admin user email address" "${ACME_EMAIL:-}"
 prompt_secret KC_ADMIN_PASS "Keycloak admin console password"
 
