@@ -30,7 +30,7 @@ The installer will:
 2. Clone the repository to `/opt/jigsaw`
 3. Ask for your domain, email, and Keycloak admin password
 4. Auto-generate all secrets (database passwords, session key, OIDC client secret), reusing existing `.env` secrets on reruns
-5. Build the PHP site image
+5. Pull prebuilt panel and PHP images from GHCR
 6. Start the full stack (Traefik, PostgreSQL, Keycloak, Jigsaw panel)
 7. Run database migrations
 8. Print your panel URL and first-login instructions
@@ -77,14 +77,28 @@ sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|<your-email>|" keycloak/jigsaw-realm.js
 # 5. Create data directories
 mkdir -p data/sites data/databases data/postgres docker/compose
 
-# 6. Build the PHP site image
-docker build -t jigsaw-php:8.4 docker/templates/web/
+# 6. Pull prebuilt images
+docker pull ghcr.io/03c/jigsaw/panel:latest
+docker pull ghcr.io/03c/jigsaw/php:8.4
+docker tag ghcr.io/03c/jigsaw/php:8.4 jigsaw-php:8.4
 
 # 7. Start the stack
-docker compose up -d --build
+docker compose up -d
 
 # 8. Wait for PostgreSQL, then run migrations
 docker compose exec jigsaw npm run db:push
+```
+
+## Publish Docker Images
+
+Build and push images from your workstation or CI:
+
+```bash
+docker build -t ghcr.io/03c/jigsaw/panel:latest .
+docker build -t ghcr.io/03c/jigsaw/php:8.4 docker/templates/web/
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+docker push ghcr.io/03c/jigsaw/panel:latest
+docker push ghcr.io/03c/jigsaw/php:8.4
 ```
 
 ## Post-Install
@@ -108,7 +122,7 @@ docker compose down && sudo rm -rf data/postgres && sudo ./install.sh
 If Traefik logs `client version 1.24 is too old. Minimum supported API version is 1.44`, update to the latest repo and recreate containers:
 
 ```bash
-git pull && docker compose down && docker compose up -d --build
+git pull && docker compose down && docker compose up -d
 ```
 
 ## Architecture
@@ -139,6 +153,7 @@ All configuration is in the `.env` file. See [`.env.example`](.env.example) for 
 |----------|-------------|
 | `PANEL_DOMAIN` | Domain for the panel (Keycloak is at `auth.<domain>`) |
 | `ACME_EMAIL` | Email for Let's Encrypt certificate notifications |
+| `JIGSAW_PANEL_IMAGE` | Panel image to run (default `ghcr.io/03c/jigsaw/panel:latest`) |
 | `POSTGRES_PASSWORD` | PostgreSQL password (auto-generated) |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password |
 | `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel |
@@ -224,8 +239,8 @@ docker compose logs -f jigsaw
 # Restart the panel after code changes
 docker compose restart jigsaw
 
-# Rebuild and restart the panel
-docker compose up -d --build jigsaw
+# Pull and restart the panel
+docker compose pull jigsaw && docker compose up -d jigsaw
 
 # Run database migrations
 docker compose exec jigsaw npm run db:push

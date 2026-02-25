@@ -14,10 +14,13 @@ set -euo pipefail
 
 REPO_URL="https://github.com/03c/jigsaw.git"
 INSTALL_DIR="/opt/jigsaw"
+PANEL_IMAGE="ghcr.io/03c/jigsaw/panel:latest"
+PHP_IMAGE="ghcr.io/03c/jigsaw/php:8.4"
 
 EXISTING_POSTGRES_PASSWORD=""
 EXISTING_SESSION_SECRET=""
 EXISTING_KEYCLOAK_CLIENT_SECRET=""
+EXISTING_PANEL_IMAGE=""
 
 # Colours
 RED='\033[0;31m'
@@ -210,7 +213,10 @@ if [[ -f .env ]]; then
   EXISTING_POSTGRES_PASSWORD=$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n1)
   EXISTING_SESSION_SECRET=$(sed -n 's/^SESSION_SECRET=//p' .env | head -n1)
   EXISTING_KEYCLOAK_CLIENT_SECRET=$(sed -n 's/^KEYCLOAK_CLIENT_SECRET=//p' .env | head -n1)
+  EXISTING_PANEL_IMAGE=$(sed -n 's/^JIGSAW_PANEL_IMAGE=//p' .env | head -n1)
 fi
+
+PANEL_IMAGE=${EXISTING_PANEL_IMAGE:-$PANEL_IMAGE}
 
 if [[ -d "data/postgres" && -z "$EXISTING_POSTGRES_PASSWORD" ]]; then
   fatal "Detected existing PostgreSQL data at data/postgres but no POSTGRES_PASSWORD in .env. Restore the original .env or reset PostgreSQL data: docker compose down && rm -rf data/postgres"
@@ -247,6 +253,7 @@ cat > .env <<EOF
 # Domain Configuration
 PANEL_DOMAIN=${PANEL_DOMAIN}
 ACME_EMAIL=${ACME_EMAIL}
+JIGSAW_PANEL_IMAGE=${PANEL_IMAGE}
 
 # PostgreSQL (shared between Keycloak and Jigsaw)
 POSTGRES_USER=jigsaw
@@ -295,19 +302,32 @@ chown -R 1000:1000 data/sites data/databases docker/compose 2>/dev/null || true
 ok "Data directories created"
 
 # ---------------------------------------------------------------------------
-# Step 7: Build the PHP site image
+# Step 7: Pull prebuilt images
 # ---------------------------------------------------------------------------
 echo ""
-info "Building PHP site image (jigsaw-php:8.4)... this may take a few minutes."
-docker build -t jigsaw-php:8.4 docker/templates/web/ -q
-ok "PHP site image built: jigsaw-php:8.4"
+info "Pulling prebuilt images..."
+
+if docker pull "$PANEL_IMAGE" >/dev/null; then
+  ok "Panel image pulled: $PANEL_IMAGE"
+else
+  fatal "Failed to pull panel image: $PANEL_IMAGE"
+fi
+
+if docker pull "$PHP_IMAGE" >/dev/null; then
+  docker tag "$PHP_IMAGE" jigsaw-php:8.4
+  ok "Site image pulled: $PHP_IMAGE"
+else
+  warn "Failed to pull site image ($PHP_IMAGE), building locally instead..."
+  docker build -t jigsaw-php:8.4 docker/templates/web/ -q
+  ok "Site image built locally: jigsaw-php:8.4"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 8: Start the stack
 # ---------------------------------------------------------------------------
 echo ""
 info "Starting Jigsaw stack..."
-docker compose up -d --build
+docker compose up -d
 
 ok "Stack started"
 

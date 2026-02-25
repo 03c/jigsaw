@@ -98,9 +98,8 @@ services:
   # Jigsaw Panel - React Router 7 Application
   # ===========================================
   jigsaw:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${JIGSAW_PANEL_IMAGE:-ghcr.io/03c/jigsaw/panel:latest}
+    pull_policy: always
     container_name: jigsaw_panel
     restart: unless-stopped
     environment:

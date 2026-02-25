@@ -1,0 +1,70 @@
+name: Publish Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/03c/jigsaw
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (panel)
+        id: panel-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/panel
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha
+
+      - name: Build and push panel image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.panel-meta.outputs.tags }}
+          labels: ${{ steps.panel-meta.outputs.labels }}
+
+      - name: Extract metadata (php)
+        id: php-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/php
+          tags: |
+            type=raw,value=8.4
+            type=sha
+
+      - name: Build and push php image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/templates/web
+          file: ./docker/templates/web/Dockerfile
+          push: true
+          tags: ${{ steps.php-meta.outputs.tags }}
+          labels: ${{ steps.php-meta.outputs.labels }}
