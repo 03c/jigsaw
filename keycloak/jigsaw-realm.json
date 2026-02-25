@@ -36,11 +36,15 @@
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "https://*/auth/callback",
+        "https://JIGSAW_PANEL_DOMAIN_PLACEHOLDER/auth/callback",
         "http://localhost:5173/auth/callback",
         "http://localhost:3000/auth/callback"
       ],
-      "webOrigins": ["*"],
+      "webOrigins": [
+        "https://JIGSAW_PANEL_DOMAIN_PLACEHOLDER",
+        "http://localhost:5173",
+        "http://localhost:3000"
+      ],
       "protocol": "openid-connect",
       "publicClient": false,
       "standardFlowEnabled": true,

@@ -369,6 +369,7 @@ fi
 # Replace placeholders
 sed -i "s|JIGSAW_CLIENT_SECRET_PLACEHOLDER|${KEYCLOAK_CLIENT_SECRET}|g" "$REALM_FILE"
 sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|${ADMIN_EMAIL}|g" "$REALM_FILE"
+sed -i "s|JIGSAW_PANEL_DOMAIN_PLACEHOLDER|${PANEL_DOMAIN}|g" "$REALM_FILE"
 
 ok "Keycloak realm configured with client secret and admin email"
 
@@ -442,6 +443,24 @@ until docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/
   fi
 done
 ok "Keycloak is ready"
+
+# Ensure Keycloak client redirect URIs match the configured panel domain
+info "Updating Keycloak client redirect URIs..."
+if docker compose exec -T \
+  -e PANEL_DOMAIN="$PANEL_DOMAIN" \
+  -e KC_ADMIN_PASS="$KC_ADMIN_PASS" \
+  keycloak bash -lc '
+    set -e
+    /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$KC_ADMIN_PASS" >/dev/null
+    CLIENT_ID=$(/opt/keycloak/bin/kcadm.sh get clients -r jigsaw -q clientId=jigsaw-panel --fields id --format csv --noquotes)
+    /opt/keycloak/bin/kcadm.sh update clients/${CLIENT_ID} -r jigsaw \
+      -s "redirectUris=[\"https://${PANEL_DOMAIN}/auth/callback\",\"http://localhost:5173/auth/callback\",\"http://localhost:3000/auth/callback\"]" \
+      -s "webOrigins=[\"https://${PANEL_DOMAIN}\",\"http://localhost:5173\",\"http://localhost:3000\"]" >/dev/null
+  ' >/dev/null 2>&1; then
+  ok "Keycloak client redirect URIs updated"
+else
+  warn "Could not auto-update Keycloak redirect URIs. If login fails with redirect_uri error, check Keycloak client settings."
+fi
 
 # ---------------------------------------------------------------------------
 # Step 10: Run database migrations

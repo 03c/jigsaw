@@ -134,10 +134,28 @@ docker compose logs -f keycloak jigsaw
 docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/jigsaw/.well-known/openid-configuration').then((r)=>r.text().then((t)=>console.log(r.status,t.slice(0,120)))).catch((e)=>{console.error(e);process.exit(1)})"
 ```
 
+If Keycloak shows `Invalid parameter: redirect_uri`, update the `jigsaw-panel` client redirect URI to exactly:
+
+`https://<your-panel-domain>/auth/callback`
+
+Then restart the panel:
+
+```bash
+docker compose restart jigsaw
+```
+
 If logs include `OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED` with issuer mismatch (`expected http://keycloak:8080/...` vs `issuer https://auth.<domain>/...`), pull the latest config and recreate the panel:
 
 ```bash
 git pull && docker compose up -d --force-recreate jigsaw
+```
+
+If certificate names look wrong after changing TLS domain settings, recreate Traefik certificates:
+
+```bash
+docker compose down
+docker volume rm $(docker volume ls -q | grep traefik_letsencrypt)
+docker compose up -d
 ```
 
 ## Architecture
