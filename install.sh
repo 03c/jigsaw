@@ -47,6 +47,10 @@ generate_hex() {
   openssl rand -hex "${1:-32}"
 }
 
+escape_sed_replacement() {
+  printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+}
+
 resolve_ipv4() {
   local host="$1"
   getent ahostsv4 "$host" 2>/dev/null | cut -d' ' -f1 | head -n1
@@ -367,9 +371,15 @@ if [[ ! -f "$REALM_FILE" ]]; then
 fi
 
 # Replace placeholders
-sed -i "s|JIGSAW_CLIENT_SECRET_PLACEHOLDER|${KEYCLOAK_CLIENT_SECRET}|g" "$REALM_FILE"
-sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|${ADMIN_EMAIL}|g" "$REALM_FILE"
-sed -i "s|JIGSAW_PANEL_DOMAIN_PLACEHOLDER|${PANEL_DOMAIN}|g" "$REALM_FILE"
+ESCAPED_KEYCLOAK_CLIENT_SECRET="$(escape_sed_replacement "$KEYCLOAK_CLIENT_SECRET")"
+ESCAPED_ADMIN_EMAIL="$(escape_sed_replacement "$ADMIN_EMAIL")"
+ESCAPED_PANEL_DOMAIN="$(escape_sed_replacement "$PANEL_DOMAIN")"
+ESCAPED_KC_ADMIN_PASS="$(escape_sed_replacement "$KC_ADMIN_PASS")"
+
+sed -i "s|JIGSAW_CLIENT_SECRET_PLACEHOLDER|${ESCAPED_KEYCLOAK_CLIENT_SECRET}|g" "$REALM_FILE"
+sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|${ESCAPED_ADMIN_EMAIL}|g" "$REALM_FILE"
+sed -i "s|JIGSAW_PANEL_DOMAIN_PLACEHOLDER|${ESCAPED_PANEL_DOMAIN}|g" "$REALM_FILE"
+sed -i "s|JIGSAW_ADMIN_PASSWORD_PLACEHOLDER|${ESCAPED_KC_ADMIN_PASS}|g" "$REALM_FILE"
 
 ok "Keycloak realm configured with client secret and admin email"
 
@@ -456,10 +466,11 @@ if docker compose exec -T \
     /opt/keycloak/bin/kcadm.sh update clients/${CLIENT_ID} -r jigsaw \
       -s "redirectUris=[\"https://${PANEL_DOMAIN}/auth/callback\",\"http://localhost:5173/auth/callback\",\"http://localhost:3000/auth/callback\"]" \
       -s "webOrigins=[\"https://${PANEL_DOMAIN}\",\"http://localhost:5173\",\"http://localhost:3000\"]" >/dev/null
+    /opt/keycloak/bin/kcadm.sh set-password -r jigsaw --username admin --new-password "$KC_ADMIN_PASS" >/dev/null
   ' >/dev/null 2>&1; then
-  ok "Keycloak client redirect URIs updated"
+  ok "Keycloak client redirect URIs and admin password updated"
 else
-  warn "Could not auto-update Keycloak redirect URIs. If login fails with redirect_uri error, check Keycloak client settings."
+  warn "Could not auto-update Keycloak client settings. If login fails, check redirect URIs and admin password in Keycloak."
 fi
 
 # ---------------------------------------------------------------------------
@@ -490,8 +501,8 @@ echo ""
 echo -e "  ${BOLD}First login:${NC}"
 echo -e "    1. Go to https://${PANEL_DOMAIN}"
 echo -e "    2. You'll be redirected to Keycloak to log in"
-echo -e "    3. Username: ${BOLD}admin${NC}  Password: ${BOLD}admin${NC} (temporary)"
-echo -e "    4. You'll be prompted to set a new password"
+echo -e "    3. Username: ${BOLD}admin${NC}  Password: ${BOLD}<the Keycloak admin password you entered>${NC}"
+echo -e "    4. You can change this password later in Keycloak"
 echo ""
 echo -e "  ${BOLD}DNS required:${NC}"
 echo -e "    Point these A records to this server's IP:"

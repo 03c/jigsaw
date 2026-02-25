@@ -85,8 +85,8 @@
       "credentials": [
         {
           "type": "password",
-          "value": "admin",
-          "temporary": true
+          "value": "JIGSAW_ADMIN_PASSWORD_PLACEHOLDER",
+          "temporary": false
         }
       ],
       "realmRoles": ["admin", "user"]

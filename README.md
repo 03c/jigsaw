@@ -104,10 +104,9 @@ docker push ghcr.io/03c/jigsaw/php:8.4
 ## Post-Install
 
 1. Open `https://panel.example.com` -- you'll be redirected to Keycloak
-2. Log in with username **admin** and password **admin** (temporary)
-3. Keycloak will prompt you to set a new password
-4. You're now in the Jigsaw dashboard as an admin
-5. To create additional users, go to `https://auth.panel.example.com` and use the Keycloak admin console
+2. Log in with username **admin** and the Keycloak admin password you entered during install
+3. You're now in the Jigsaw dashboard as an admin
+4. To create additional users, go to `https://auth.panel.example.com` and use the Keycloak admin console
 
 ## Troubleshooting
 
