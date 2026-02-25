@@ -14,11 +14,16 @@ export async function loader({ request }: { request: Request }) {
 
   if (error) {
     console.error("OAuth error:", error, url.searchParams.get("error_description"));
-    return redirect("/auth/login");
+    return new Response(
+      `Authentication failed: ${error}${url.searchParams.get("error_description") ? ` - ${url.searchParams.get("error_description")}` : ""}`,
+      { status: 400 }
+    );
   }
 
   if (!code || !state) {
-    return redirect("/auth/login");
+    return new Response("Authentication callback is missing required parameters.", {
+      status: 400,
+    });
   }
 
   const session = await getSession(request);
@@ -27,7 +32,10 @@ export async function loader({ request }: { request: Request }) {
 
   if (!savedState || state !== savedState || !codeVerifier) {
     console.error("OAuth state mismatch or missing code verifier");
-    return redirect("/auth/login");
+    return new Response(
+      "Authentication session mismatch. Clear cookies for this site and try again.",
+      { status: 400 }
+    );
   }
 
   try {
@@ -88,6 +96,9 @@ export async function loader({ request }: { request: Request }) {
     });
   } catch (err) {
     console.error("OAuth callback error:", err);
-    return redirect("/auth/login");
+    return new Response(
+      "Authentication failed while processing the callback. Check server logs for details.",
+      { status: 500 }
+    );
   }
 }

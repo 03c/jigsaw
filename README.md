@@ -144,6 +144,8 @@ Then restart the panel:
 docker compose restart jigsaw
 ```
 
+If the browser shows `ERR_TOO_MANY_REDIRECTS` after login, clear cookies for `server.jigsawhost.com` and `auth.server.jigsawhost.com`, then retry using the exact configured panel domain (not IP or alternate host).
+
 If logs include `OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED` with issuer mismatch (`expected http://keycloak:8080/...` vs `issuer https://auth.<domain>/...`), pull the latest config and recreate the panel:
 
 ```bash
