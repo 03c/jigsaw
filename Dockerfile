@@ -21,6 +21,8 @@ RUN apk add --no-cache procps util-linux
 COPY ./package.json package-lock.json /app/
 COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
+COPY ./drizzle.config.ts /app/drizzle.config.ts
+COPY ./app/models /app/app/models
 WORKDIR /app
 
 # Create data directories

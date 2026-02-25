@@ -314,19 +314,15 @@ ok "PostgreSQL is ready"
 
 info "Waiting for Keycloak to start (this can take 30-60s on first boot)..."
 WAITED=0
-MAX_WAIT=120
-until docker compose exec -T keycloak bash -c 'curl -sf http://localhost:8080/health/ready' &>/dev/null; do
+MAX_WAIT=300
+until docker compose exec -T keycloak bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' &>/dev/null; do
   sleep 5
   WAITED=$((WAITED + 5))
   if [[ $WAITED -ge $MAX_WAIT ]]; then
-    warn "Keycloak hasn't responded yet after ${MAX_WAIT}s. It may still be starting."
-    warn "Check: docker compose logs keycloak"
-    break
+    fatal "Keycloak did not become ready within ${MAX_WAIT}s. Check: docker compose logs keycloak"
   fi
 done
-if [[ $WAITED -lt $MAX_WAIT ]]; then
-  ok "Keycloak is ready"
-fi
+ok "Keycloak is ready"
 
 # ---------------------------------------------------------------------------
 # Step 10: Run database migrations
