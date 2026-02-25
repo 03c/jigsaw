@@ -43,12 +43,13 @@ sudo ./install.sh
 
 ## DNS Setup
 
-Point two A records to your server's public IP:
+Point three A records to your server's public IP:
 
 | Record | Type | Value |
 |--------|------|-------|
 | `panel.example.com` | A | `<your-server-ip>` |
 | `auth.panel.example.com` | A | `<your-server-ip>` |
+| `traefik.panel.example.com` | A | `<your-server-ip>` |
 
 Each site you create will also need its own A record pointing to the same IP.
 

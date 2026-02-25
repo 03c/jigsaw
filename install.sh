@@ -21,6 +21,7 @@ SKIP_DNS_CHECK="${SKIP_DNS_CHECK:-0}"
 EXISTING_POSTGRES_PASSWORD=""
 EXISTING_SESSION_SECRET=""
 EXISTING_KEYCLOAK_CLIENT_SECRET=""
+EXISTING_OAUTH2_PROXY_COOKIE_SECRET=""
 
 # Colours
 RED='\033[0;31m'
@@ -45,6 +46,10 @@ generate_password() {
 
 generate_hex() {
   openssl rand -hex "${1:-32}"
+}
+
+generate_base64() {
+  openssl rand -base64 "${1:-32}" | tr -d '\n'
 }
 
 escape_sed_replacement() {
@@ -251,6 +256,7 @@ if [[ -f .env ]]; then
   EXISTING_POSTGRES_PASSWORD=$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n1)
   EXISTING_SESSION_SECRET=$(sed -n 's/^SESSION_SECRET=//p' .env | head -n1)
   EXISTING_KEYCLOAK_CLIENT_SECRET=$(sed -n 's/^KEYCLOAK_CLIENT_SECRET=//p' .env | head -n1)
+  EXISTING_OAUTH2_PROXY_COOKIE_SECRET=$(sed -n 's/^OAUTH2_PROXY_COOKIE_SECRET=//p' .env | head -n1)
 fi
 
 if [[ -d "data/postgres" && -z "$EXISTING_POSTGRES_PASSWORD" ]]; then
@@ -266,6 +272,7 @@ prompt_secret KC_ADMIN_PASS "Keycloak admin console password"
 POSTGRES_PASSWORD=${EXISTING_POSTGRES_PASSWORD:-$(generate_password 32)}
 SESSION_SECRET=${EXISTING_SESSION_SECRET:-$(generate_hex 32)}
 KEYCLOAK_CLIENT_SECRET=${EXISTING_KEYCLOAK_CLIENT_SECRET:-$(generate_password 48)}
+OAUTH2_PROXY_COOKIE_SECRET=${EXISTING_OAUTH2_PROXY_COOKIE_SECRET:-$(generate_base64 32)}
 
 echo ""
 ok "Domain:           $PANEL_DOMAIN"
@@ -351,6 +358,9 @@ KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASS}
 # Keycloak OIDC Client
 KEYCLOAK_CLIENT_ID=jigsaw-panel
 KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+
+# OAuth2 Proxy (protects Traefik dashboard)
+OAUTH2_PROXY_COOKIE_SECRET=${OAUTH2_PROXY_COOKIE_SECRET}
 
 # Session encryption secret
 SESSION_SECRET=${SESSION_SECRET}
@@ -464,8 +474,8 @@ if docker compose exec -T \
     /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password "$KC_ADMIN_PASS" >/dev/null
     CLIENT_ID=$(/opt/keycloak/bin/kcadm.sh get clients -r jigsaw -q clientId=jigsaw-panel --fields id --format csv --noquotes)
     /opt/keycloak/bin/kcadm.sh update clients/${CLIENT_ID} -r jigsaw \
-      -s "redirectUris=[\"https://${PANEL_DOMAIN}/auth/callback\",\"http://localhost:5173/auth/callback\",\"http://localhost:3000/auth/callback\"]" \
-      -s "webOrigins=[\"https://${PANEL_DOMAIN}\",\"http://localhost:5173\",\"http://localhost:3000\"]" >/dev/null
+      -s "redirectUris=[\"https://${PANEL_DOMAIN}/auth/callback\",\"https://traefik.${PANEL_DOMAIN}/oauth2/callback\",\"http://localhost:5173/auth/callback\",\"http://localhost:3000/auth/callback\"]" \
+      -s "webOrigins=[\"https://${PANEL_DOMAIN}\",\"https://traefik.${PANEL_DOMAIN}\",\"http://localhost:5173\",\"http://localhost:3000\"]" >/dev/null
     /opt/keycloak/bin/kcadm.sh set-password -r jigsaw --username admin --new-password "$KC_ADMIN_PASS" >/dev/null
   ' >/dev/null 2>&1; then
   ok "Keycloak client redirect URIs and admin password updated"
