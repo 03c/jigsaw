@@ -76,12 +76,17 @@ export async function exchangeCode(
   expectedState: string
 ): Promise<client.TokenEndpointResponse> {
   const config = await getOIDCConfig();
+  const redirectUrl = new URL(redirectUri);
+  const normalizedCallbackUrl = new URL(currentUrl.toString());
 
-  const tokens = await client.authorizationCodeGrant(config, currentUrl, {
+  // When running behind a reverse proxy, request.url may be internal http://...
+  // but OIDC requires exact redirect_uri matching (scheme + host + path).
+  normalizedCallbackUrl.protocol = redirectUrl.protocol;
+  normalizedCallbackUrl.host = redirectUrl.host;
+
+  const tokens = await client.authorizationCodeGrant(config, normalizedCallbackUrl, {
     pkceCodeVerifier: codeVerifier,
     expectedState,
-  }, {
-    redirect_uri: redirectUri,
   });
 
   return tokens;
