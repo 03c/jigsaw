@@ -7,6 +7,7 @@ import { count } from "drizzle-orm";
 
 export async function loader({ request }: { request: Request }) {
   const sessionUser = await requireUser(request);
+  const panelHost = new URL(request.url).host;
 
   const user = await db.query.users.findFirst({
     where: eq(users.id, sessionUser.id),
@@ -20,11 +21,12 @@ export async function loader({ request }: { request: Request }) {
   return {
     user: user || sessionUser,
     siteCount: siteCount.value,
+    keycloakAccountUrl: `https://auth.${panelHost}/realms/jigsaw/account/`,
   };
 }
 
 export default function Profile() {
-  const { user, siteCount } = useLoaderData<typeof loader>();
+  const { user, siteCount, keycloakAccountUrl } = useLoaderData<typeof loader>();
 
   return (
     <div className="max-w-2xl">
@@ -71,7 +73,9 @@ export default function Profile() {
         <p className="text-sm text-blue-700 dark:text-blue-300">
           To change your password or enable MFA, visit the{" "}
           <a
-            href={`${typeof window !== "undefined" ? "" : ""}/auth/login`}
+            href={keycloakAccountUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="font-medium underline"
           >
             Keycloak account console

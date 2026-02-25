@@ -1,6 +1,11 @@
 import Docker from "dockerode";
 import path from "node:path";
 import fs from "node:fs/promises";
+import {
+  resolveDbImage,
+  resolveSftpImage,
+  resolveWebImage,
+} from "~/lib/images.server";
 
 // Connect to the Docker daemon via the mounted socket
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
@@ -8,19 +13,33 @@ const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 export { docker };
 
 // Base path for site data (inside the panel container)
-const SITES_DATA_PATH = process.env.SITES_DATA_PATH || "/app/data/sites";
+const SITES_BASE_PATH_HOST = process.env.SITES_BASE_PATH_HOST || "/home";
+const SITES_BASE_PATH_PANEL = process.env.SITES_BASE_PATH_PANEL || "/host-home";
 const DB_DATA_PATH = process.env.DB_DATA_PATH || "/app/data/databases";
 const TEMPLATES_PATH = process.env.TEMPLATES_PATH || "/app/docker/templates";
 const TRAEFIK_NETWORK = "traefik_public";
 
 export interface SiteContainerConfig {
   slug: string;
+  ownerSegment: string;
   domain: string;
   phpVersion: string;
   dbName: string;
   dbUser: string;
   dbPassword: string;
   dbRootPassword: string;
+}
+
+function getSitePaths(ownerSegment: string, slug: string) {
+  const hostSiteRoot = path.join(SITES_BASE_PATH_HOST, ownerSegment, slug);
+  const panelSiteRoot = path.join(SITES_BASE_PATH_PANEL, ownerSegment, slug);
+
+  return {
+    hostSiteRoot,
+    panelSiteRoot,
+    hostWebRoot: path.join(hostSiteRoot, "public_html"),
+    panelWebRoot: path.join(panelSiteRoot, "public_html"),
+  };
 }
 
 /**
@@ -46,24 +65,35 @@ export async function createWebContainer(
   config: SiteContainerConfig
 ): Promise<string> {
   const containerName = `jigsaw_${config.slug}_web`;
-  const webrootHost = path.join(SITES_DATA_PATH, config.slug, "public_html");
+  const sitePaths = getSitePaths(config.ownerSegment, config.slug);
   const networkName = `jigsaw_${config.slug}_net`;
+  const siteTemplatePath = path.join(TEMPLATES_PATH, "site", "index.html");
 
-  // Ensure webroot directory exists and has a default index.php
-  await fs.mkdir(webrootHost, { recursive: true });
-  const indexPath = path.join(webrootHost, "index.php");
+  // Ensure webroot directory exists and has a default index.html
+  await fs.mkdir(sitePaths.panelWebRoot, { recursive: true });
+  const indexPath = path.join(sitePaths.panelWebRoot, "index.html");
   try {
     await fs.access(indexPath);
   } catch {
+    const siteTemplate = await fs.readFile(siteTemplatePath, "utf-8");
+    const rendered = siteTemplate
+      .replaceAll("{{DOMAIN}}", config.domain)
+      .replaceAll("{{SITE_SLUG}}", config.slug)
+      .replaceAll("{{OWNER_SEGMENT}}", config.ownerSegment)
+      .replaceAll(
+        "{{SITE_PATH}}",
+        `/home/${config.ownerSegment}/${config.slug}/public_html`
+      );
+
     await fs.writeFile(
       indexPath,
-      `<?php\necho "<h1>Welcome to ${config.slug}</h1>";\necho "<p>Your site is up and running.</p>";\nphpinfo();\n`,
+      rendered,
       "utf-8"
     );
   }
 
   const container = await docker.createContainer({
-    Image: `jigsaw-php:${config.phpVersion}`,
+    Image: resolveWebImage(config.phpVersion),
     name: containerName,
     Hostname: containerName,
     Env: [
@@ -84,7 +114,7 @@ export async function createWebContainer(
       [`traefik.docker.network`]: TRAEFIK_NETWORK,
     },
     HostConfig: {
-      Binds: [`${webrootHost}:/var/www/html`],
+      Binds: [`${sitePaths.hostWebRoot}:/var/www/html`],
       RestartPolicy: { Name: "unless-stopped" },
     },
     NetworkingConfig: {
@@ -115,7 +145,7 @@ export async function createDbContainer(
   await fs.mkdir(dbDataHost, { recursive: true });
 
   const container = await docker.createContainer({
-    Image: "mariadb:11",
+    Image: resolveDbImage(),
     name: containerName,
     Hostname: containerName,
     Env: [
@@ -151,11 +181,11 @@ export async function createSftpContainer(
   config: SiteContainerConfig & { sftpUser: string; sftpPassword: string; sftpPort: number }
 ): Promise<string> {
   const containerName = `jigsaw_${config.slug}_sftp`;
-  const webrootHost = path.join(SITES_DATA_PATH, config.slug, "public_html");
+  const sitePaths = getSitePaths(config.ownerSegment, config.slug);
   const networkName = `jigsaw_${config.slug}_net`;
 
   const container = await docker.createContainer({
-    Image: "atmoz/sftp",
+    Image: resolveSftpImage(),
     name: containerName,
     Hostname: containerName,
     Env: [],
@@ -167,7 +197,7 @@ export async function createSftpContainer(
       "jigsaw.service": "sftp",
     },
     HostConfig: {
-      Binds: [`${webrootHost}:/home/${config.sftpUser}/public_html`],
+      Binds: [`${sitePaths.hostSiteRoot}:/home/${config.sftpUser}/${config.slug}`],
       PortBindings: {
         "22/tcp": [{ HostPort: String(config.sftpPort) }],
       },

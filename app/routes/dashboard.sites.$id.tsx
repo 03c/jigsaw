@@ -13,7 +13,7 @@ import {
   createSftpContainer,
   findAvailableSftpPort,
 } from "~/lib/docker.server";
-import { generateId, generatePassword } from "~/lib/crypto.server";
+import { generateId, generatePassword, slugify } from "~/lib/crypto.server";
 import { StatusBadge } from "~/components/ui/status-badge";
 
 export async function loader({
@@ -32,6 +32,7 @@ export async function loader({
         : and(eq(sites.id, params.id), eq(sites.userId, user.id)),
     with: {
       services: true,
+      user: true,
     },
   });
 
@@ -69,7 +70,7 @@ export async function action({
       user.role === "admin"
         ? eq(sites.id, params.id)
         : and(eq(sites.id, params.id), eq(sites.userId, user.id)),
-    with: { services: true },
+    with: { services: true, user: true },
   });
 
   if (!site) {
@@ -125,6 +126,9 @@ export async function action({
         const sftpPort = await findAvailableSftpPort();
         const sftpUser = `sftp_${site.slug}`;
         const sftpPassword = generatePassword(24);
+        const ownerSegment = slugify(
+          (site.user?.email || site.userId).split("@")[0] || site.userId
+        );
 
         // Get DB config from existing db service
         const dbService = site.services.find((s) => s.type === "database");
@@ -132,6 +136,7 @@ export async function action({
 
         const containerId = await createSftpContainer({
           slug: site.slug,
+          ownerSegment,
           domain: site.domain,
           phpVersion: site.phpVersion,
           dbName: (dbConfig.dbName as string) || "",
@@ -154,6 +159,7 @@ export async function action({
             sftpUser,
             sftpPassword,
             sftpPort,
+            hostPath: `/home/${ownerSegment}/${site.slug}`,
           },
         });
         break;
@@ -215,6 +221,9 @@ export default function SiteDetail() {
   const sftpService = site.services.find((s: { type: string }) => s.type === "sftp");
   const dbConfig = (dbService?.config || {}) as Record<string, unknown>;
   const sftpConfig = (sftpService?.config || {}) as Record<string, unknown>;
+  const ownerSegment = slugify(
+    (site.user?.email || site.userId).split("@")[0] || site.userId
+  );
 
   return (
     <div>
@@ -298,7 +307,7 @@ export default function SiteDetail() {
             <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Database</p>
-                <p className="text-xs text-gray-400">MariaDB 11</p>
+                <p className="text-xs text-gray-400">{dbService ? "MariaDB" : "Not enabled"}</p>
               </div>
               <StatusBadge status={dbService?.status || "stopped"} />
             </div>
@@ -333,32 +342,36 @@ export default function SiteDetail() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Database Credentials
           </h2>
-          <div className="space-y-3 font-mono text-sm">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Host (internal)</p>
-              <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
-                {`jigsaw_${site.slug}_db`}
-              </p>
+          {dbService ? (
+            <div className="space-y-3 font-mono text-sm">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Host (internal)</p>
+                <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
+                  {`jigsaw_${site.slug}_db`}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Database</p>
+                <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
+                  {String(dbConfig.dbName || "")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Username</p>
+                <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
+                  {String(dbConfig.dbUser || "")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Password</p>
+                <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white break-all">
+                  {String(dbConfig.dbPassword || "")}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Database</p>
-              <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
-                {String(dbConfig.dbName || "")}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Username</p>
-              <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
-                {String(dbConfig.dbUser || "")}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Password</p>
-              <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white break-all">
-                {String(dbConfig.dbPassword || "")}
-              </p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No database is enabled for this site.</p>
+          )}
 
           {sftpService && (
             <>
@@ -370,6 +383,12 @@ export default function SiteDetail() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Host</p>
                   <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white">
                     {`your-server-ip:${sftpConfig.sftpPort}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Path</p>
+                  <p className="bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg text-gray-900 dark:text-white break-all">
+                    {String(sftpConfig.hostPath || `/home/${ownerSegment}/${site.slug}`)}
                   </p>
                 </div>
                 <div>

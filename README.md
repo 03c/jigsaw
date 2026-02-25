@@ -7,7 +7,7 @@ Each user site runs in isolated Docker containers with its own network, Nginx + 
 ## Features
 
 - **Site management** -- create, start, stop, restart, and delete websites from the browser
-- **Isolated containers** -- every site gets its own Docker network, web server, and database
+- **Isolated containers** -- every site gets its own Docker network and web server, with optional database
 - **Auto-generated credentials** -- database and SFTP passwords are created with cryptographic randomness
 - **Automatic SSL** -- Traefik provisions and renews Let's Encrypt certificates for every site
 - **User authentication** -- Keycloak provides login, password reset, MFA, and brute-force protection
@@ -15,6 +15,7 @@ Each user site runs in isolated Docker containers with its own network, Nginx + 
 - **Server dashboard** -- real-time CPU, RAM, disk, and network stats for admins
 - **Docker admin** -- view running containers, prune unused resources, all from the panel
 - **SFTP per site** -- optional SFTP container with auto-assigned port and generated credentials
+- **Per-site home folders** -- site content lives under `/home/<user>/<site>/public_html`
 - **Activity log** -- track who did what across the panel
 
 ## Quick Install
@@ -191,6 +192,11 @@ All configuration is in the `.env` file. See [`.env.example`](.env.example) for 
 | `POSTGRES_PASSWORD` | PostgreSQL password (auto-generated) |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password |
 | `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel |
+| `SITE_WEB_IMAGE_TEMPLATE` | Template used for site web images (default `jigsaw-php:{phpVersion}`) |
+| `SITE_DB_IMAGE` | Database image for new site DB containers (default `mariadb:lts`) |
+| `SITE_SFTP_IMAGE` | Image for per-site SFTP containers (default `atmoz/sftp`) |
+| `SITES_BASE_PATH_HOST` | Host base path for site folders (default `/home`) |
+| `SITES_BASE_PATH_PANEL` | Mounted path inside panel container for writing site files |
 | `SESSION_SECRET` | Encryption key for session cookies |
 
 ## Project Structure
@@ -216,6 +222,7 @@ jigsaw/
 │   └── routes.ts               # Route config
 ├── docker/
 │   ├── templates/web/          # Nginx + PHP-FPM Dockerfile & config
+│   ├── templates/site/         # Default site bootstrap templates
 │   └── init-keycloak-db.sql    # Creates Keycloak DB in shared PostgreSQL
 ├── keycloak/
 │   └── jigsaw-realm.json       # Keycloak realm with roles, client, default admin

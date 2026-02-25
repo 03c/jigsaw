@@ -362,6 +362,13 @@ KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
 # OAuth2 Proxy (protects Traefik dashboard)
 OAUTH2_PROXY_COOKIE_SECRET=${OAUTH2_PROXY_COOKIE_SECRET}
 
+# Site defaults
+SITE_WEB_IMAGE_TEMPLATE=jigsaw-php:{phpVersion}
+SITE_DB_IMAGE=mariadb:lts
+SITE_SFTP_IMAGE=atmoz/sftp
+SITES_BASE_PATH_HOST=/home
+SITES_BASE_PATH_PANEL=/host-home
+
 # Session encryption secret
 SESSION_SECRET=${SESSION_SECRET}
 EOF

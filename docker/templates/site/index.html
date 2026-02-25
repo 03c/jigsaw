@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to {{DOMAIN}}</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at top right, #dff7ff, #fff6e8 45%, #f7ffe8);
+        color: #1f2937;
+      }
+
+      main {
+        max-width: 680px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        padding: 2.2rem;
+        box-shadow: 0 18px 45px rgba(17, 24, 39, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: 2rem;
+      }
+
+      p {
+        line-height: 1.6;
+      }
+
+      code {
+        background: #f3f4f6;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+      }
+
+      a {
+        color: #0f766e;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Welcome to {{DOMAIN}}!</h1>
+      <p>Your new site is live and ready for action.</p>
+      <p>Edit files in <code>{{SITE_PATH}}</code> and refresh.</p>
+      <p>
+        Built with care by
+        <a href="https://jigsawhost.com" target="_blank" rel="noopener">JigsawHost</a>.
+      </p>
+    </main>
+  </body>
+</html>

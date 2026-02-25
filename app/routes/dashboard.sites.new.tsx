@@ -14,6 +14,8 @@ import {
   createSiteNetwork,
   createWebContainer,
   createDbContainer,
+  createSftpContainer,
+  findAvailableSftpPort,
 } from "~/lib/docker.server";
 
 export async function loader({ request }: { request: Request }) {
@@ -28,6 +30,8 @@ export async function action({ request }: { request: Request }) {
   const name = (formData.get("name") as string)?.trim();
   const domain = (formData.get("domain") as string)?.trim();
   const phpVersion = (formData.get("phpVersion") as string) || "8.4";
+  const createDatabase = formData.get("createDatabase") === "on";
+  const enableSftp = formData.get("enableSftp") === "on";
 
   // Validation
   const errors: Record<string, string> = {};
@@ -64,6 +68,7 @@ export async function action({ request }: { request: Request }) {
 
   const siteId = generateId();
   const networkName = `jigsaw_${slug}_net`;
+  const ownerSegment = slugify(user.email.split("@")[0] || user.id);
   const dbName = generateDbName(slug);
   const dbUser = generateDbUsername(slug);
   const dbPassword = generatePassword();
@@ -85,37 +90,41 @@ export async function action({ request }: { request: Request }) {
     // Create Docker network
     await createSiteNetwork(slug);
 
-    // Create database container
-    const dbContainerId = await createDbContainer({
-      slug,
-      domain,
-      phpVersion,
-      dbName,
-      dbUser,
-      dbPassword,
-      dbRootPassword,
-    });
-
-    await db.insert(services).values({
-      id: generateId(),
-      siteId,
-      type: "database",
-      containerId: dbContainerId,
-      containerName: `jigsaw_${slug}_db`,
-      status: "running",
-      config: {
+    if (createDatabase) {
+      // Create database container
+      const dbContainerId = await createDbContainer({
+        slug,
+        ownerSegment,
+        domain,
+        phpVersion,
         dbName,
         dbUser,
         dbPassword,
         dbRootPassword,
-        host: `jigsaw_${slug}_db`,
-        port: 3306,
-      },
-    });
+      });
+
+      await db.insert(services).values({
+        id: generateId(),
+        siteId,
+        type: "database",
+        containerId: dbContainerId,
+        containerName: `jigsaw_${slug}_db`,
+        status: "running",
+        config: {
+          dbName,
+          dbUser,
+          dbPassword,
+          dbRootPassword,
+          host: `jigsaw_${slug}_db`,
+          port: 3306,
+        },
+      });
+    }
 
     // Create web container
     const webContainerId = await createWebContainer({
       slug,
+      ownerSegment,
       domain,
       phpVersion,
       dbName,
@@ -136,6 +145,41 @@ export async function action({ request }: { request: Request }) {
         domain,
       },
     });
+
+    if (enableSftp) {
+      const sftpPort = await findAvailableSftpPort();
+      const sftpUser = `sftp_${slug}`;
+      const sftpPassword = generatePassword(24);
+
+      const sftpContainerId = await createSftpContainer({
+        slug,
+        ownerSegment,
+        domain,
+        phpVersion,
+        dbName,
+        dbUser,
+        dbPassword,
+        dbRootPassword,
+        sftpUser,
+        sftpPassword,
+        sftpPort,
+      });
+
+      await db.insert(services).values({
+        id: generateId(),
+        siteId,
+        type: "sftp",
+        containerId: sftpContainerId,
+        containerName: `jigsaw_${slug}_sftp`,
+        status: "running",
+        config: {
+          sftpUser,
+          sftpPassword,
+          sftpPort,
+          hostPath: `/home/${ownerSegment}/${slug}`,
+        },
+      });
+    }
 
     // Update site status to running
     await db
@@ -180,7 +224,7 @@ export default function NewSite() {
         Create New Site
       </h1>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-        Set up a new website with a web server, PHP, and database.
+        Set up a new website with flexible services and one-click SSL.
       </p>
 
       <Form method="post" className="space-y-6">
@@ -247,6 +291,39 @@ export default function NewSite() {
               <option value="8.4">PHP 8.4 (Latest)</option>
             </select>
           </div>
+
+          <div className="pt-2 space-y-3">
+            <label className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                id="createDatabase"
+                name="createDatabase"
+                defaultChecked
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                <span className="font-medium text-gray-900 dark:text-white">Create database</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  Provision a MariaDB service with generated credentials.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                id="enableSftp"
+                name="enableSftp"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                <span className="font-medium text-gray-900 dark:text-white">Enable SFTP access</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  Creates a secure file service mapped to your site folder.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* What will be created */}
@@ -256,8 +333,10 @@ export default function NewSite() {
           </h3>
           <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
             <li>- Isolated Docker network</li>
-            <li>- Web server (Nginx + PHP-FPM 8.4)</li>
-            <li>- MariaDB 11 database with auto-generated credentials</li>
+            <li>- Web server (Nginx + PHP-FPM)</li>
+            <li>- Optional MariaDB database</li>
+            <li>- Optional SFTP file access</li>
+            <li>- Site files under /home/&lt;user&gt;/&lt;site&gt;/public_html</li>
             <li>- SSL certificate (via Let's Encrypt)</li>
           </ul>
         </div>

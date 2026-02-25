@@ -162,10 +162,16 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-jigsaw-panel}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       PANEL_URL: https://${PANEL_DOMAIN}
+      SITE_WEB_IMAGE_TEMPLATE: ${SITE_WEB_IMAGE_TEMPLATE:-jigsaw-php:{phpVersion}}
+      SITE_DB_IMAGE: ${SITE_DB_IMAGE:-mariadb:lts}
+      SITE_SFTP_IMAGE: ${SITE_SFTP_IMAGE:-atmoz/sftp}
+      SITES_BASE_PATH_HOST: ${SITES_BASE_PATH_HOST:-/home}
+      SITES_BASE_PATH_PANEL: ${SITES_BASE_PATH_PANEL:-/host-home}
       SESSION_SECRET: ${SESSION_SECRET}
       NODE_ENV: production
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /home:/host-home
       - ./data/sites:/app/data/sites
       - ./data/databases:/app/data/databases
       - ./docker/compose:/app/docker/compose

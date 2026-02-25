@@ -6,6 +6,7 @@ interface SidebarProps {
     email: string;
     role: string;
   };
+  panelHost: string;
 }
 
 const navItems = [
@@ -46,8 +47,10 @@ function NavIcon({ name }: { name: string }) {
   );
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, panelHost }: SidebarProps) {
   const location = useLocation();
+  const keycloakUrl = `https://auth.${panelHost}`;
+  const traefikUrl = `https://traefik.${panelHost}/dashboard/`;
 
   function isActive(href: string) {
     if (href === "/dashboard" || href === "/admin") {
@@ -105,6 +108,24 @@ export function Sidebar({ user }: SidebarProps) {
                 {item.label}
               </Link>
             ))}
+            <a
+              href={keycloakUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
+            >
+              <NavIcon name="shield" />
+              Keycloak Console
+            </a>
+            <a
+              href={traefikUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
+            >
+              <NavIcon name="server" />
+              Traefik Dashboard
+            </a>
           </>
         )}
       </nav>
