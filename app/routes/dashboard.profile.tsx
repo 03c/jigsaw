@@ -4,10 +4,12 @@ import { requireUser } from "~/lib/session.server";
 import { db } from "~/lib/db.server";
 import { users, sites } from "~/models/schema";
 import { count } from "drizzle-orm";
+import { getAdminLinks } from "~/lib/admin-links.server";
 
 export async function loader({ request }: { request: Request }) {
   const sessionUser = await requireUser(request);
-  const panelHost = new URL(request.url).host;
+  const links = getAdminLinks(request.url);
+  const keycloakBase = links.keycloakUrl.replace(/\/$/, "");
 
   const user = await db.query.users.findFirst({
     where: eq(users.id, sessionUser.id),
@@ -21,7 +23,7 @@ export async function loader({ request }: { request: Request }) {
   return {
     user: user || sessionUser,
     siteCount: siteCount.value,
-    keycloakAccountUrl: `https://auth.${panelHost}/realms/jigsaw/account/`,
+    keycloakAccountUrl: `${keycloakBase}/realms/jigsaw/account/`,
   };
 }
 

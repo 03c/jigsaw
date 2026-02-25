@@ -6,7 +6,8 @@ interface SidebarProps {
     email: string;
     role: string;
   };
-  panelHost: string;
+  keycloakUrl: string;
+  traefikUrl: string;
 }
 
 const navItems = [
@@ -19,7 +20,6 @@ const adminItems = [
   { href: "/admin", label: "Admin Overview", icon: "shield" },
   { href: "/admin/users", label: "Users", icon: "users" },
   { href: "/admin/sites", label: "All Sites", icon: "globe" },
-  { href: "/admin/server", label: "Server", icon: "server" },
 ];
 
 const icons: Record<string, string> = {
@@ -47,10 +47,8 @@ function NavIcon({ name }: { name: string }) {
   );
 }
 
-export function Sidebar({ user, panelHost }: SidebarProps) {
+export function Sidebar({ user, keycloakUrl, traefikUrl }: SidebarProps) {
   const location = useLocation();
-  const keycloakUrl = `https://auth.${panelHost}`;
-  const traefikUrl = `https://traefik.${panelHost}/dashboard/`;
 
   function isActive(href: string) {
     if (href === "/dashboard" || href === "/admin") {

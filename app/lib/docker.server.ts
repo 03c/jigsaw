@@ -7,8 +7,22 @@ import {
   resolveWebImage,
 } from "~/lib/images.server";
 
-// Connect to the Docker daemon via the mounted socket
-const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+function createDockerClient(): Docker {
+  const configuredSocket = process.env.DOCKER_SOCKET_PATH;
+
+  if (configuredSocket) {
+    return new Docker({ socketPath: configuredSocket });
+  }
+
+  if (process.platform === "win32") {
+    return new Docker({ socketPath: "//./pipe/docker_engine" });
+  }
+
+  return new Docker({ socketPath: "/var/run/docker.sock" });
+}
+
+// Connect to the Docker daemon (Linux socket in container, npipe on Windows host)
+const docker = createDockerClient();
 
 export { docker };
 

@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.env.local
 /node_modules/
 
 # React Router
@@ -10,9 +11,11 @@
 /data/sites/
 /data/databases/
 /data/postgres/
+/data/postgres-local/
 
 # Generated compose files
 /docker/compose/
+/keycloak/jigsaw-realm.dev.json
 
 # IDE
 .idea/

@@ -192,11 +192,14 @@ All configuration is in the `.env` file. See [`.env.example`](.env.example) for 
 | `POSTGRES_PASSWORD` | PostgreSQL password (auto-generated) |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password |
 | `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel |
+| `KEYCLOAK_CONSOLE_URL` | URL used for admin Keycloak navigation links |
+| `TRAEFIK_DASHBOARD_URL` | URL used for admin Traefik navigation links |
 | `SITE_WEB_IMAGE_TEMPLATE` | Template used for site web images (default `jigsaw-php:{phpVersion}`) |
 | `SITE_DB_IMAGE` | Database image for new site DB containers (default `mariadb:lts`) |
 | `SITE_SFTP_IMAGE` | Image for per-site SFTP containers (default `atmoz/sftp`) |
 | `SITES_BASE_PATH_HOST` | Host base path for site folders (default `/home`) |
 | `SITES_BASE_PATH_PANEL` | Mounted path inside panel container for writing site files |
+| `DOCKER_SOCKET_PATH` | Docker daemon socket override (useful for Windows local dev) |
 | `SESSION_SECRET` | Encryption key for session cookies |
 
 ## Project Structure
@@ -209,6 +212,7 @@ jigsaw/
 │   │   ├── auth.server.ts      # Keycloak OIDC (PKCE flow)
 │   │   ├── db.server.ts        # PostgreSQL via Drizzle ORM
 │   │   ├── docker.server.ts    # Docker container orchestration
+│   │   ├── images.server.ts    # Site image resolution and env overrides
 │   │   ├── session.server.ts   # Cookie session + auth guards
 │   │   ├── crypto.server.ts    # Password/slug/UUID generation
 │   │   └── stats.server.ts     # System & Docker stats
@@ -227,6 +231,9 @@ jigsaw/
 ├── keycloak/
 │   └── jigsaw-realm.json       # Keycloak realm with roles, client, default admin
 ├── docker-compose.yml          # Full stack: Traefik + PostgreSQL + Keycloak + Panel
+├── docker-compose.local.yml    # Local-only PostgreSQL + Keycloak services
+├── scripts/
+│   └── prepare-dev-realm.mjs   # Generates local Keycloak realm import file
 ├── Dockerfile                  # Multi-stage build for the panel (Node 22)
 ├── drizzle.config.ts
 ├── install.sh                  # Interactive installer
@@ -250,16 +257,18 @@ jigsaw/
 
 ## Development
 
-To work on the panel locally:
+For a fast local dev loop (recommended), run the app on your host with HMR and only run backing services in Docker.
+
+### Local Dev (Windows-friendly)
 
 ```bash
 npm install
 
-# Start a local PostgreSQL (or use the Docker one)
-docker compose up postgres -d
+# Create local env file
+cp .env.local.example .env.local
 
-# Set DATABASE_URL for local dev
-export DATABASE_URL=postgres://jigsaw:jigsaw_secret@localhost:5432/jigsaw
+# Start local services (PostgreSQL + Keycloak)
+npm run dev:services:up
 
 # Push the schema
 npm run db:push
@@ -268,7 +277,34 @@ npm run db:push
 npm run dev
 ```
 
-The dev server runs at `http://localhost:5173`. Auth routes won't work without Keycloak -- for local development you can also bring up the full stack with `docker compose up -d` and access it via the configured domain.
+PowerShell equivalent for env copy:
+
+```powershell
+Copy-Item .env.local.example .env.local
+```
+
+The app runs at `http://localhost:5173` and Keycloak at `http://localhost:8080`.
+
+Default local credentials:
+
+- Keycloak admin user: `admin`
+- Keycloak admin password: `admin` (change in `.env.local`)
+
+When you are done:
+
+```bash
+npm run dev:services:down
+```
+
+To tail local service logs:
+
+```bash
+npm run dev:services:logs
+```
+
+### Optional Full-Stack Parity Locally
+
+If you want to test Traefik + TLS + router labels exactly like production, run the full stack in Docker (`docker compose up -d`) and point local domains accordingly.
 
 ## Useful Commands
 
@@ -276,6 +312,12 @@ The dev server runs at `http://localhost:5173`. Auth routes won't work without K
 # View logs
 docker compose logs -f
 docker compose logs -f jigsaw
+
+# Local dev services
+npm run dev:services:up
+npm run dev:services:down
+npm run dev:services:logs
+npm run dev:bootstrap
 
 # Restart the panel after code changes
 docker compose restart jigsaw

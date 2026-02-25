@@ -5,6 +5,11 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
+    "dev:realm": "node --env-file=.env.local ./scripts/prepare-dev-realm.mjs",
+    "dev:services:up": "npm run dev:realm && docker compose --env-file .env.local -f docker-compose.local.yml up -d",
+    "dev:services:down": "docker compose --env-file .env.local -f docker-compose.local.yml down",
+    "dev:services:logs": "docker compose --env-file .env.local -f docker-compose.local.yml logs -f",
+    "dev:bootstrap": "npm run dev:services:up && npm run db:push",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "db:generate": "drizzle-kit generate",

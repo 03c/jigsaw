@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: jigsaw_postgres_local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jigsaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jigsaw_secret}
+      POSTGRES_DB: jigsaw
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres-local:/var/lib/postgresql/data
+      - ./docker/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jigsaw}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: jigsaw_keycloak_local
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-jigsaw}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-jigsaw_secret}
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/jigsaw-realm.dev.json:/opt/keycloak/data/import/jigsaw-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy

@@ -11,7 +11,7 @@ async function getOIDCConfig(): Promise<client.Configuration> {
   const issuerUrl =
     process.env.KEYCLOAK_PUBLIC_URL ||
     process.env.KEYCLOAK_ISSUER_URL ||
-    "https://auth.localhost/realms/jigsaw";
+    "http://localhost:8080/realms/jigsaw";
   const clientId = process.env.KEYCLOAK_CLIENT_ID || "jigsaw-panel";
   const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET || "";
 

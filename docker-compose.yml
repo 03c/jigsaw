@@ -159,6 +159,8 @@ services:
       DOCKER_API_VERSION: "1.44"
       KEYCLOAK_ISSUER_URL: https://auth.${PANEL_DOMAIN}/realms/jigsaw
       KEYCLOAK_PUBLIC_URL: https://auth.${PANEL_DOMAIN}/realms/jigsaw
+      KEYCLOAK_CONSOLE_URL: https://auth.${PANEL_DOMAIN}
+      TRAEFIK_DASHBOARD_URL: https://traefik.${PANEL_DOMAIN}/dashboard/
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-jigsaw-panel}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       PANEL_URL: https://${PANEL_DOMAIN}
