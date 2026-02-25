@@ -22,7 +22,7 @@ Each user site runs in isolated Docker containers with its own network, Nginx + 
 **Requirements:** Ubuntu 22.04+ (or Debian 12+), a domain name with DNS pointed to the server, and ports 80/443 open.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh | sudo bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh)
 ```
 
 The installer will:

@@ -43,12 +43,23 @@ generate_hex() {
 prompt() {
   local var_name="$1" prompt_text="$2" default="${3:-}"
   local value
+  local prompt_string
   if [[ -n "$default" ]]; then
-    read -rp "$(echo -e "${BOLD}${prompt_text}${NC} [${default}]: ")" value
+    prompt_string="$(echo -e "${BOLD}${prompt_text}${NC} [${default}]: ")"
+    if [[ -r /dev/tty ]]; then
+      read -rp "$prompt_string" value </dev/tty
+    else
+      read -rp "$prompt_string" value
+    fi
     value="${value:-$default}"
   else
     while [[ -z "${value:-}" ]]; do
-      read -rp "$(echo -e "${BOLD}${prompt_text}${NC}: ")" value
+      prompt_string="$(echo -e "${BOLD}${prompt_text}${NC}: ")"
+      if [[ -r /dev/tty ]]; then
+        read -rp "$prompt_string" value </dev/tty
+      else
+        read -rp "$prompt_string" value
+      fi
       [[ -z "$value" ]] && warn "This field is required."
     done
   fi
@@ -58,14 +69,27 @@ prompt() {
 prompt_secret() {
   local var_name="$1" prompt_text="$2" default="${3:-}"
   local value
+  local prompt_string
   if [[ -n "$default" ]]; then
-    read -srp "$(echo -e "${BOLD}${prompt_text}${NC} [****]: ")" value
-    echo
+    prompt_string="$(echo -e "${BOLD}${prompt_text}${NC} [****]: ")"
+    if [[ -r /dev/tty ]]; then
+      read -srp "$prompt_string" value </dev/tty
+      echo >/dev/tty
+    else
+      read -srp "$prompt_string" value
+      echo
+    fi
     value="${value:-$default}"
   else
     while [[ -z "${value:-}" ]]; do
-      read -srp "$(echo -e "${BOLD}${prompt_text}${NC}: ")" value
-      echo
+      prompt_string="$(echo -e "${BOLD}${prompt_text}${NC}: ")"
+      if [[ -r /dev/tty ]]; then
+        read -srp "$prompt_string" value </dev/tty
+        echo >/dev/tty
+      else
+        read -srp "$prompt_string" value
+        echo
+      fi
       [[ -z "$value" ]] && warn "This field is required."
     done
   fi
@@ -96,7 +120,11 @@ fi
 source /etc/os-release
 if [[ "$ID" != "ubuntu" && "$ID" != "debian" ]]; then
   warn "This script is designed for Ubuntu/Debian. Your OS: $ID $VERSION_ID"
-  read -rp "Continue anyway? (y/N): " cont
+  if [[ -r /dev/tty ]]; then
+    read -rp "Continue anyway? (y/N): " cont </dev/tty
+  else
+    read -rp "Continue anyway? (y/N): " cont
+  fi
   [[ "$cont" != "y" && "$cont" != "Y" ]] && exit 1
 fi
 
