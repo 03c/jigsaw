@@ -29,7 +29,7 @@ The installer will:
 1. Install Docker and Docker Compose if not present
 2. Clone the repository to `/opt/jigsaw`
 3. Ask for your domain, email, and Keycloak admin password
-4. Auto-generate all secrets (database passwords, session key, OIDC client secret)
+4. Auto-generate all secrets (database passwords, session key, OIDC client secret), reusing existing `.env` secrets on reruns
 5. Build the PHP site image
 6. Start the full stack (Traefik, PostgreSQL, Keycloak, Jigsaw panel)
 7. Run database migrations
@@ -94,6 +94,22 @@ docker compose exec jigsaw npm run db:push
 3. Keycloak will prompt you to set a new password
 4. You're now in the Jigsaw dashboard as an admin
 5. To create additional users, go to `https://auth.panel.example.com` and use the Keycloak admin console
+
+## Troubleshooting
+
+If Keycloak fails with `password authentication failed for user "jigsaw"`, your PostgreSQL data was initialized with a different password than the one in `.env`.
+
+For a fresh install, reset PostgreSQL data and rerun:
+
+```bash
+docker compose down && sudo rm -rf data/postgres && sudo ./install.sh
+```
+
+If Traefik logs `client version 1.24 is too old. Minimum supported API version is 1.44`, update to the latest repo and recreate containers:
+
+```bash
+git pull && docker compose down && docker compose up -d --build
+```
 
 ## Architecture
 

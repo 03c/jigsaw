@@ -212,6 +212,10 @@ if [[ -f .env ]]; then
   EXISTING_KEYCLOAK_CLIENT_SECRET=$(sed -n 's/^KEYCLOAK_CLIENT_SECRET=//p' .env | head -n1)
 fi
 
+if [[ -d "data/postgres" && -z "$EXISTING_POSTGRES_PASSWORD" ]]; then
+  fatal "Detected existing PostgreSQL data at data/postgres but no POSTGRES_PASSWORD in .env. Restore the original .env or reset PostgreSQL data: docker compose down && rm -rf data/postgres"
+fi
+
 prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)"
 prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates"
 prompt       ADMIN_EMAIL    "Admin user email address" "${ACME_EMAIL:-}"
@@ -330,6 +334,9 @@ until docker compose exec -T keycloak bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' 
   sleep 5
   WAITED=$((WAITED + 5))
   if [[ $WAITED -ge $MAX_WAIT ]]; then
+    if docker compose logs --no-color keycloak 2>/dev/null | grep -q 'password authentication failed for user "jigsaw"'; then
+      fatal "Keycloak cannot authenticate to PostgreSQL (password mismatch). If this is a fresh install, run: docker compose down && rm -rf data/postgres && ./install.sh"
+    fi
     fatal "Keycloak did not become ready within ${MAX_WAIT}s. Check: docker compose logs keycloak"
   fi
 done
@@ -339,7 +346,7 @@ ok "Keycloak is ready"
 # Step 10: Run database migrations
 # ---------------------------------------------------------------------------
 info "Running database migrations..."
-docker compose exec -T jigsaw_panel npm run db:push
+docker compose exec -T -e npm_config_update_notifier=false jigsaw npm run db:push
 ok "Database schema created"
 
 # ---------------------------------------------------------------------------
