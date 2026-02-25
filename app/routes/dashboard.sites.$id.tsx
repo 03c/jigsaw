@@ -13,8 +13,17 @@ import {
   createSftpContainer,
   findAvailableSftpPort,
 } from "~/lib/docker.server";
-import { generateId, generatePassword, slugify } from "~/lib/crypto.server";
+import { generateId, generatePassword } from "~/lib/crypto.server";
 import { StatusBadge } from "~/components/ui/status-badge";
+
+function toOwnerSegment(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "user"
+  );
+}
 
 export async function loader({
   request,
@@ -126,7 +135,7 @@ export async function action({
         const sftpPort = await findAvailableSftpPort();
         const sftpUser = `sftp_${site.slug}`;
         const sftpPassword = generatePassword(24);
-        const ownerSegment = slugify(
+        const ownerSegment = toOwnerSegment(
           (site.user?.email || site.userId).split("@")[0] || site.userId
         );
 
@@ -221,7 +230,7 @@ export default function SiteDetail() {
   const sftpService = site.services.find((s: { type: string }) => s.type === "sftp");
   const dbConfig = (dbService?.config || {}) as Record<string, unknown>;
   const sftpConfig = (sftpService?.config || {}) as Record<string, unknown>;
-  const ownerSegment = slugify(
+  const ownerSegment = toOwnerSegment(
     (site.user?.email || site.userId).split("@")[0] || site.userId
   );
 
