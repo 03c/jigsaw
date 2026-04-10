@@ -1,7 +1,13 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { loadEnvFile } from "node:process";
 
 const root = process.cwd();
+const envLocalPath = path.join(root, ".env.local");
+if (existsSync(envLocalPath)) {
+  loadEnvFile(envLocalPath);
+}
 const sourcePath = path.join(root, "keycloak", "jigsaw-realm.json");
 const targetPath = path.join(root, "keycloak", "jigsaw-realm.dev.json");
 

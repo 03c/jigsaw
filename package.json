@@ -12,7 +12,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium",
     "dev": "react-router dev",
-    "dev:realm": "node --env-file=.env.local ./scripts/prepare-dev-realm.mjs",
+    "dev:realm": "node ./scripts/prepare-dev-realm.mjs",
     "dev:services:up": "npm run dev:realm && docker compose --env-file .env.local -f docker-compose.local.yml up -d",
     "dev:services:down": "docker compose --env-file .env.local -f docker-compose.local.yml down",
     "dev:services:logs": "docker compose --env-file .env.local -f docker-compose.local.yml logs -f",
