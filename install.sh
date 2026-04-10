@@ -5,7 +5,10 @@ set -euo pipefail
 # Jigsaw Control Panel - Install Script
 # ===========================================
 #
-# Usage (fresh server):
+# Usage (fresh server, one line):
+#   curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh | sudo bash
+#
+# Usage (review script before running):
 #   curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh -o /tmp/jigsaw-install.sh && chmod +x /tmp/jigsaw-install.sh && sudo /tmp/jigsaw-install.sh
 #
 # Usage (already cloned):
@@ -191,11 +194,14 @@ else
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl gnupg
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
+  # Docker publishes separate APT repos for Ubuntu and Debian
+  DOCKER_APT_DISTRO="ubuntu"
+  [[ "$ID" == "debian" ]] && DOCKER_APT_DISTRO="debian"
+  curl -fsSL "https://download.docker.com/linux/${DOCKER_APT_DISTRO}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
   chmod a+r /etc/apt/keyrings/docker.gpg
   echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$ID \
-    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_APT_DISTRO} \
+    ${VERSION_CODENAME} stable" | \
     tee /etc/apt/sources.list.d/docker.list > /dev/null
   apt-get update -qq
   apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -263,8 +269,8 @@ if [[ -d "data/postgres" && -z "$EXISTING_POSTGRES_PASSWORD" ]]; then
   fatal "Detected existing PostgreSQL data at data/postgres but no POSTGRES_PASSWORD in .env. Restore the original .env or reset PostgreSQL data: docker compose down && rm -rf data/postgres"
 fi
 
-prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)" "server.jigsawhost.com"
-prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates" "chris.child@gmail.com"
+prompt       PANEL_DOMAIN   "Panel domain (e.g. panel.example.com)" "panel.example.com"
+prompt       ACME_EMAIL     "Email for Let's Encrypt SSL certificates" "admin@example.com"
 prompt       ADMIN_EMAIL    "Admin user email address" "${ACME_EMAIL:-}"
 prompt_secret KC_ADMIN_PASS "Keycloak admin console password"
 

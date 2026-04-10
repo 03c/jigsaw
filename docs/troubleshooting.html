@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Troubleshooting — Jigsaw</title>
+    <meta name="description" content="Common Jigsaw production and development issues: TLS, Keycloak, OIDC, PostgreSQL." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html" aria-current="page">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Troubleshooting</h1>
+        <p class="lead">
+          Quick fixes for issues seen in production and local development. For the full list, see the repository
+          <a href="https://github.com/03c/jigsaw/blob/main/README.md#troubleshooting">README</a>.
+        </p>
+
+        <h2>PostgreSQL: password authentication failed for user &quot;jigsaw&quot;</h2>
+        <p>
+          The data directory was initialized with a different password than <code>POSTGRES_PASSWORD</code> in
+          <code>.env</code>. On a disposable dev machine you can reset:
+        </p>
+        <pre><code>docker compose down
+sudo rm -rf data/postgres
+sudo ./install.sh</code></pre>
+
+        <h2>Traefik: Docker API version too old</h2>
+        <p>Update the repo and recreate containers:</p>
+        <pre><code>git pull &amp;&amp; docker compose down &amp;&amp; docker compose up -d</code></pre>
+
+        <h2>SSL certificate timeout during install</h2>
+        <ul>
+          <li>Confirm A records for panel, <code>auth.</code>, and <code>traefik.</code> hostnames</li>
+          <li>Ensure ports 80 and 443 are reachable from the internet</li>
+          <li>Inspect <code>docker compose logs traefik</code> for ACME errors or rate limits</li>
+        </ul>
+
+        <h2>Keycloak slow or &quot;Authentication is temporarily unavailable&quot;</h2>
+        <p>First boot can take 30–60 seconds. Check logs:</p>
+        <pre><code>docker compose logs -f keycloak jigsaw</code></pre>
+
+        <h2>Invalid parameter: redirect_uri</h2>
+        <p>
+          In Keycloak, the <code>jigsaw-panel</code> client must allow
+          <code>https://&lt;PANEL_DOMAIN&gt;/auth/callback</code>. The installer usually sets this; after domain changes,
+          update the client and restart the panel:
+        </p>
+        <pre><code>docker compose restart jigsaw</code></pre>
+
+        <h2>ERR_TOO_MANY_REDIRECTS</h2>
+        <p>Clear cookies for the panel and auth hostnames; use the exact configured hostname (not an IP alias).</p>
+
+        <h2>OIDC issuer mismatch</h2>
+        <p>Pull latest config and recreate the panel container:</p>
+        <pre><code>git pull &amp;&amp; docker compose up -d --force-recreate jigsaw</code></pre>
+
+        <h2>Local dev: Keycloak not ready</h2>
+        <pre><code>curl -sf http://localhost:8080/realms/jigsaw/.well-known/openid-configuration | head -c 120</code></pre>
+
+        <p><a href="index.html">← Home</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>

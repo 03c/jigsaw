@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contributing — Jigsaw</title>
+    <meta name="description" content="How to contribute to Jigsaw: setup, typecheck, and pull requests." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Contributing</h1>
+        <p class="lead">
+          Contributions are welcome. The full guide is in
+          <a href="https://github.com/03c/jigsaw/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>; this page summarizes
+          the workflow.
+        </p>
+
+        <h2>Getting started</h2>
+        <ol>
+          <li>Fork and clone the repository</li>
+          <li>Follow <a href="development.html">Local development</a></li>
+          <li>Create a branch from <code>main</code></li>
+          <li>Run <code>npm run typecheck</code> before opening a PR</li>
+        </ol>
+
+        <h2>Quality bar</h2>
+        <ul>
+          <li>TypeScript strict mode — no new type errors</li>
+          <li>Manual testing in the browser (there is no automated test suite yet)</li>
+          <li>Schema changes: update <code>app/models/schema.ts</code> and document behaviour in the PR</li>
+        </ul>
+
+        <h2>Code conventions</h2>
+        <ul>
+          <li>Server-only modules: <code>*.server.ts</code></li>
+          <li>Imports from app code: <code>~/</code> alias</li>
+          <li>Styling: Tailwind utility classes</li>
+        </ul>
+
+        <p><a href="index.html">← Home</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>

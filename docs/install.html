@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install Jigsaw on a server</title>
+    <meta
+      name="description"
+      content="Prerequisites, DNS, and one-line install for Jigsaw on Ubuntu or Debian with Docker."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html" aria-current="page">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Install on a server</h1>
+        <p class="lead">
+          Jigsaw targets fresh or dedicated <strong>Ubuntu</strong> or <strong>Debian</strong> machines with public
+          hostnames. The installer configures Docker, clones the app to <code>/opt/jigsaw</code> by default, writes
+          secrets, pulls images from GitHub Container Registry, and starts the stack.
+        </p>
+
+        <nav class="toc" aria-label="Page contents">
+          <strong>On this page</strong>
+          <ul>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#dns">DNS before you run the installer</a></li>
+            <li><a href="#one-line">One-line install</a></li>
+            <li><a href="#what-it-does">What the installer does</a></li>
+            <li><a href="#after">After install</a></li>
+            <li><a href="#upgrade">Upgrading</a></li>
+            <li><a href="#manual">Manual install (advanced)</a></li>
+          </ul>
+        </nav>
+
+        <h2 id="prerequisites">Prerequisites</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Requirement</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>OS</td>
+              <td>Ubuntu 22.04+ or Debian 12+. Other distros are not tested by the install script.</td>
+            </tr>
+            <tr>
+              <td>Hardware</td>
+              <td>At least 2 GB RAM and enough disk for Docker images, PostgreSQL data, and site files (plan for growth).</td>
+            </tr>
+            <tr>
+              <td>Network</td>
+              <td>Public IPv4 (or correct DNS/routing for your setup). Ports <strong>80</strong> and <strong>443</strong> must reach the host for HTTP-01 TLS.</td>
+            </tr>
+            <tr>
+              <td>Domain</td>
+              <td>A registered domain you control. You will point DNS at this server before or during install.</td>
+            </tr>
+            <tr>
+              <td>Access</td>
+              <td>SSH with sudo. The installer must run as <strong>root</strong> (use <code>sudo</code>).</td>
+            </tr>
+            <tr>
+              <td>Docker</td>
+              <td>Not required beforehand — the script installs Docker Engine and the Compose plugin if missing.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note warn">
+          <strong>Firewall:</strong> Allow inbound TCP 22 (SSH), 80, and 443. If you use <code>ufw</code>:
+          <code>ufw allow OpenSSH &amp;&amp; ufw allow 80/tcp &amp;&amp; ufw allow 443/tcp &amp;&amp; ufw enable</code>
+        </div>
+
+        <h2 id="dns">DNS before you run the installer</h2>
+        <p>
+          Create <strong>A records</strong> for the panel hostname, Keycloak, and Traefik dashboard. All three should
+          point to the same public IP as your server (the installer checks public DNS against your detected public IP).
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Type</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>panel.example.com</code></td>
+              <td>A</td>
+              <td>Your server&apos;s public IP</td>
+            </tr>
+            <tr>
+              <td><code>auth.panel.example.com</code></td>
+              <td>A</td>
+              <td>Same IP</td>
+            </tr>
+            <tr>
+              <td><code>traefik.panel.example.com</code></td>
+              <td>A</td>
+              <td>Same IP</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Replace <code>panel.example.com</code> with the real FQDN you will enter when prompted (for example
+          <code>panel.yourdomain.com</code>). Keycloak is always at <code>auth.&lt;PANEL_DOMAIN&gt;</code> and the
+          Traefik UI at <code>traefik.&lt;PANEL_DOMAIN&gt;</code>.
+        </p>
+        <p>
+          Each customer site you create will need its own DNS record later (typically an A record to the same server).
+        </p>
+        <div class="note">
+          <strong>Staging / private DNS:</strong> If public DNS is wrong or unavailable, you can skip strict checks with
+          <code>SKIP_DNS_CHECK=1 sudo ./install.sh</code> — only do this when you understand the TLS implications.
+        </div>
+
+        <h2 id="one-line">One-line install</h2>
+        <p>Download and run the official installer from the <code>main</code> branch (review the script on GitHub first if you prefer):</p>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh | sudo bash</code></pre>
+        <p>Equivalent steps (explicit temp file, same effect):</p>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh -o /tmp/jigsaw-install.sh \
+  &amp;&amp; chmod +x /tmp/jigsaw-install.sh \
+  &amp;&amp; sudo /tmp/jigsaw-install.sh</code></pre>
+        <p>
+          If you already cloned the repository (for example to <code>/opt/jigsaw</code>), run the script from that
+          directory:
+        </p>
+        <pre><code>cd /opt/jigsaw &amp;&amp; sudo ./install.sh</code></pre>
+
+        <h2 id="what-it-does">What the installer does</h2>
+        <ol>
+          <li>Installs Docker Engine and Compose if needed (APT on Debian/Ubuntu).</li>
+          <li>Clones or updates the repo (default <code>/opt/jigsaw</code>).</li>
+          <li>Prompts for panel domain, Let&apos;s Encrypt email, admin email, and Keycloak admin password.</li>
+          <li>Generates or preserves secrets (<code>POSTGRES_PASSWORD</code>, <code>SESSION_SECRET</code>, OIDC and OAuth2 proxy secrets).</li>
+          <li>Validates DNS for the panel and <code>auth.&lt;domain&gt;</code> when possible.</li>
+          <li>Patches <code>keycloak/jigsaw-realm.json</code> with your domain and credentials.</li>
+          <li>Pulls panel and PHP images from <code>ghcr.io/03c/jigsaw/</code> (builds PHP image locally if pull fails).</li>
+          <li>Runs <code>docker compose up -d</code>, waits for PostgreSQL and Keycloak, updates OIDC redirect URIs, runs <code>npm run db:push</code> in the panel container.</li>
+          <li>Waits until HTTPS responds for the panel and auth hostnames.</li>
+        </ol>
+
+        <h2 id="after">After install</h2>
+        <ol>
+          <li>Open <code>https://&lt;PANEL_DOMAIN&gt;</code> — you will be redirected to Keycloak.</li>
+          <li>Sign in with username <code>admin</code> and the Keycloak admin password you set.</li>
+          <li>Manage users at <code>https://auth.&lt;PANEL_DOMAIN&gt;</code> (Keycloak admin console).</li>
+          <li>Open the Traefik dashboard at <code>https://traefik.&lt;PANEL_DOMAIN&gt;</code> (OAuth2 Proxy + Keycloak).</li>
+        </ol>
+
+        <h2 id="upgrade">Upgrading</h2>
+        <pre><code>cd /opt/jigsaw
+git pull
+docker compose pull
+docker compose exec jigsaw npm run db:push
+docker compose up -d</code></pre>
+        <p>Rerunning <code>sudo ./install.sh</code> is also supported; it keeps existing <code>.env</code> secrets when present.</p>
+
+        <h2 id="manual">Manual install (advanced)</h2>
+        <p>
+          See the repository <a href="https://github.com/03c/jigsaw/blob/main/README.md#manual-install">README — Manual install</a>
+          for cloning, hand-written <code>.env</code>, realm patching, image pulls, and <code>docker compose up</code>.
+        </p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>

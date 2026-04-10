@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jigsaw — Self-hosted web hosting control panel</title>
+    <meta
+      name="description"
+      content="Jigsaw is a self-hosted control panel for PHP sites with Docker, Traefik, Keycloak, and MariaDB per site."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html" aria-current="page">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="wrap">
+        <h1>Host PHP sites on your own server</h1>
+        <p class="lead">
+          Jigsaw is a self-hosted control panel built with React Router 7. Create isolated Docker networks per site,
+          automatic TLS via Traefik and Let&apos;s Encrypt, and Keycloak-backed login — no proprietary panel licence
+          required.
+        </p>
+        <p>
+          <a class="btn" href="install.html">Server install guide</a>
+          <a class="btn" href="development.html" style="background: var(--surface); color: var(--text) !important; border: 1px solid var(--border)">Local development</a>
+        </p>
+      </div>
+    </section>
+
+    <main class="content">
+      <div class="wrap">
+        <h2 class="visually-hidden" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)">Overview</h2>
+        <div class="grid-cards">
+          <article class="card">
+            <a class="stretched" href="install.html">
+              <h2>Quick install</h2>
+              <p>One command on Ubuntu or Debian: Docker, clone, secrets, TLS, database migrations.</p>
+            </a>
+          </article>
+          <article class="card">
+            <a class="stretched" href="architecture.html">
+              <h2>How it fits together</h2>
+              <p>Traefik, Keycloak, PostgreSQL, per-site Nginx + PHP-FPM + MariaDB.</p>
+            </a>
+          </article>
+          <article class="card">
+            <a class="stretched" href="configuration.html">
+              <h2>Environment reference</h2>
+              <p>Production <code>.env</code> variables and local development settings.</p>
+            </a>
+          </article>
+          <article class="card">
+            <a class="stretched" href="troubleshooting.html">
+              <h2>Troubleshooting</h2>
+              <p>Common SSL, Keycloak, and OIDC issues with fixes.</p>
+            </a>
+          </article>
+        </div>
+
+        <h2>Features</h2>
+        <ul>
+          <li><strong>Sites</strong> — create, start, stop, restart, and delete from the browser</li>
+          <li><strong>Isolation</strong> — each site gets its own Docker network; optional MariaDB and SFTP</li>
+          <li><strong>TLS</strong> — Traefik obtains and renews Let&apos;s Encrypt certificates</li>
+          <li><strong>Auth</strong> — Keycloak (OIDC/PKCE), MFA and brute-force protection available in the realm</li>
+          <li><strong>Roles</strong> — admins manage all users and sites; regular users see only their own</li>
+          <li><strong>Observability</strong> — server and Docker stats for admins; Traefik dashboard behind OAuth2 Proxy</li>
+        </ul>
+
+        <h2>Tech stack</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Technology</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>App</td>
+              <td>React Router 7 (SSR), Node.js 22, Vite 7, Tailwind CSS 4</td>
+            </tr>
+            <tr>
+              <td>Panel database</td>
+              <td>PostgreSQL 17, Drizzle ORM</td>
+            </tr>
+            <tr>
+              <td>Site databases</td>
+              <td>MariaDB LTS (one container per site when enabled)</td>
+            </tr>
+            <tr>
+              <td>Identity</td>
+              <td>Keycloak 26, openid-client v6</td>
+            </tr>
+            <tr>
+              <td>Edge</td>
+              <td>Traefik v3, OAuth2 Proxy (Traefik dashboard)</td>
+            </tr>
+            <tr>
+              <td>Orchestration</td>
+              <td>dockerode (Docker API via host socket)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          The canonical long-form documentation lives in the repository
+          <a href="https://github.com/03c/jigsaw/blob/main/README.md">README</a>. This site highlights install,
+          architecture, and operations for reading in the browser.
+        </p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>
+          Jigsaw — MIT Licence ·
+          <a href="https://github.com/03c/jigsaw">Source</a>
+          ·
+          <a href="contributing.html">Contributing</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

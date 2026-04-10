@@ -4,9 +4,14 @@ A self-hosted web hosting control panel built with React Router 7. Manage websit
 
 Each user site runs in isolated Docker containers with its own network, Nginx + PHP-FPM web server, and MariaDB database. Optional per-site SFTP access can be enabled with one click.
 
+## Documentation website
+
+The [`docs/`](docs/) directory is a **static HTML/CSS site** (no build step) suitable for [GitHub Pages](https://docs.github.com/en/pages). After enabling Pages for the repository (Settings → Pages → GitHub Actions), pushes to `main` that touch `docs/` deploy the site. It includes install prerequisites, architecture, configuration, development, security, and troubleshooting — browse it locally by opening `docs/index.html` or read the same content on the deployed Pages URL.
+
 ## Table of Contents
 
 - [Features](#features)
+- [Documentation website](#documentation-website)
 - [Quick Install](#quick-install)
 - [DNS Setup](#dns-setup)
 - [Manual Install](#manual-install)
@@ -42,7 +47,23 @@ Each user site runs in isolated Docker containers with its own network, Nginx + 
 
 ## Quick Install
 
-**Requirements:** Ubuntu 22.04+ (or Debian 12+), a domain name with DNS pointed to the server, and ports 80/443 open.
+### Prerequisites
+
+| Requirement | Details |
+|-------------|---------|
+| **OS** | Ubuntu 22.04+ or Debian 12+ (installer uses APT; other distros are untested) |
+| **Hardware** | At least ~2 GB RAM; enough disk for Docker images, PostgreSQL, and site content |
+| **Network** | Public IPv4 (typical); **ports 80 and 443** reachable from the internet for Let's Encrypt HTTP-01 |
+| **DNS** | A domain you control; see [DNS Setup](#dns-setup) before running the installer |
+| **Access** | SSH with sudo; the script must run as **root** |
+
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh | sudo bash
+```
+
+To save the script to disk first (review or air-gapped workflows):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/03c/jigsaw/main/install.sh -o /tmp/jigsaw-install.sh && chmod +x /tmp/jigsaw-install.sh && sudo /tmp/jigsaw-install.sh
@@ -346,7 +367,7 @@ jigsaw/
 | Database (panel) | [PostgreSQL 17](https://www.postgresql.org/) via [Drizzle ORM](https://orm.drizzle.team/) |
 | Database (sites) | [MariaDB](https://mariadb.org/) LTS (one per site) |
 | Auth | [Keycloak 26](https://www.keycloak.org/) (OIDC/PKCE via [openid-client v6](https://github.com/panva/openid-client)) |
-| Reverse Proxy | [Traefik v3](https://traefik.io/) (auto-SSL via Let's Encrypt) |
+| Reverse Proxy | [Traefik v3.6](https://traefik.io/) (auto-SSL via Let's Encrypt) |
 | Dashboard Auth | [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) (protects Traefik dashboard) |
 | Container Management | [dockerode](https://github.com/apocas/dockerode) (Node.js Docker SDK) |
 | System Monitoring | [systeminformation](https://github.com/sebhildebrandt/systeminformation) |

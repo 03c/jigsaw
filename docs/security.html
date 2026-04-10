@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security — Jigsaw</title>
+    <meta name="description" content="Security model, reporting vulnerabilities, and hardening notes for Jigsaw." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html" aria-current="page">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Security</h1>
+        <p class="lead">
+          Jigsaw delegates authentication to Keycloak, encrypts panel sessions, and isolates site workloads in Docker.
+          The panel needs access to the Docker socket — treat the host accordingly.
+        </p>
+
+        <h2>Report a vulnerability</h2>
+        <p>
+          Do not file public issues for unfixed security bugs. Use GitHub private vulnerability reporting or email
+          maintainers as described in
+          <a href="https://github.com/03c/jigsaw/blob/main/SECURITY.md">SECURITY.md</a>.
+        </p>
+
+        <h2>Authentication and sessions</h2>
+        <ul>
+          <li>OIDC with PKCE via <code>openid-client</code> — the panel does not store user passwords</li>
+          <li>Session cookie: HTTP-only, <code>SameSite=lax</code>, <code>secure</code> in production</li>
+          <li>Session lifetime: 7 days (configurable in application code)</li>
+        </ul>
+
+        <h2>Network isolation</h2>
+        <ul>
+          <li>Per-site Docker networks (<code>jigsaw_&lt;slug&gt;_net</code>)</li>
+          <li>Site databases not attached to the public edge network</li>
+          <li>Traefik dashboard protected by OAuth2 Proxy + Keycloak forward-auth</li>
+        </ul>
+
+        <h2>Secrets</h2>
+        <ul>
+          <li><code>install.sh</code> generates strong random values with OpenSSL</li>
+          <li><code>.env</code> is written with mode <code>600</code></li>
+          <li>Server-only code uses <code>*.server.ts</code> and is stripped from client bundles</li>
+        </ul>
+
+        <h2>Docker socket</h2>
+        <p>
+          The panel container mounts the Docker socket to orchestrate customer workloads. That is effectively
+          privileged. Mitigations in code include labelling resources and scoping prune operations; for high-security
+          deployments consider a socket proxy. See
+          <a href="https://github.com/03c/jigsaw/blob/main/SECURITY.md">SECURITY.md</a> for details.
+        </p>
+
+        <p><a href="index.html">← Home</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>
