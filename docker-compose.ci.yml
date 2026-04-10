@@ -1,0 +1,61 @@
+# Minimal stack for CI E2E: PostgreSQL + Keycloak + panel (Traefik omitted).
+# Realm file must exist before Keycloak starts (npm run dev:realm with CI env vars).
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: jigsaw
+      POSTGRES_PASSWORD: jigsaw_secret
+      POSTGRES_DB: jigsaw
+    volumes:
+      - ./docker/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jigsaw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: jigsaw
+      KC_DB_PASSWORD: jigsaw_secret
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./keycloak/jigsaw-realm.dev.json:/opt/keycloak/data/import/jigsaw-realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  jigsaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://jigsaw:jigsaw_secret@postgres:5432/jigsaw
+      DOCKER_API_VERSION: "1.44"
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/jigsaw
+      KEYCLOAK_PUBLIC_URL: http://localhost:8080/realms/jigsaw
+      KEYCLOAK_CONSOLE_URL: http://localhost:8080
+      KEYCLOAK_CLIENT_ID: jigsaw-panel
+      KEYCLOAK_CLIENT_SECRET: dev-jigsaw-client-secret
+      PANEL_URL: http://localhost:3000
+      SESSION_SECRET: ci-session-secret-change-me
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
