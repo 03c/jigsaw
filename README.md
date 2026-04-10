@@ -4,6 +4,27 @@ A self-hosted web hosting control panel built with React Router 7. Manage websit
 
 Each user site runs in isolated Docker containers with its own network, Nginx + PHP-FPM web server, and MariaDB database. Optional per-site SFTP access can be enabled with one click.
 
+## Table of Contents
+
+- [Features](#features)
+- [Quick Install](#quick-install)
+- [DNS Setup](#dns-setup)
+- [Manual Install](#manual-install)
+- [Post-Install](#post-install)
+- [Upgrading](#upgrading)
+- [Architecture](#architecture)
+- [Configuration Reference](#configuration-reference)
+- [Database Schema](#database-schema)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+- [Development](#development)
+- [Useful Commands](#useful-commands)
+- [Publish Docker Images](#publish-docker-images)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Licence](#licence)
+
 ## Features
 
 - **Site management** -- create, start, stop, restart, and delete websites from the browser
@@ -14,9 +35,10 @@ Each user site runs in isolated Docker containers with its own network, Nginx + 
 - **Role-based access** -- admin users can manage all sites and users; regular users see only their own
 - **Server dashboard** -- real-time CPU, RAM, disk, and network stats for admins
 - **Docker admin** -- view running containers, prune unused resources, all from the panel
-- **SFTP per site** -- optional SFTP container with auto-assigned port and generated credentials
+- **SFTP per site** -- optional SFTP container with auto-assigned port (range 2200-2299) and generated credentials
 - **Per-site home folders** -- site content lives under `/home/<user>/<site>/public_html`
 - **Activity log** -- track who did what across the panel
+- **Traefik dashboard** -- protected by OAuth2 Proxy + Keycloak, accessible to admins
 
 ## Quick Install
 
@@ -30,11 +52,15 @@ The installer will:
 1. Install Docker and Docker Compose if not present
 2. Clone the repository to `/opt/jigsaw`
 3. Ask for your domain, email, and Keycloak admin password
-4. Auto-generate all secrets (database passwords, session key, OIDC client secret), reusing existing `.env` secrets on reruns
-5. Pull prebuilt panel and PHP images from GHCR
-6. Start the full stack (Traefik, PostgreSQL, Keycloak, Jigsaw panel)
-7. Run database migrations
-8. Validate DNS, request one SAN Let's Encrypt certificate for panel/auth/traefik, then print first-login instructions
+4. Auto-generate all secrets (database passwords, session key, OIDC client secret, OAuth2 proxy cookie secret), reusing existing `.env` secrets on reruns
+5. Validate DNS records for the panel and auth subdomains
+6. Patch the Keycloak realm JSON with your domain, client secret, and admin credentials
+7. Pull prebuilt panel and PHP images from GHCR
+8. Start the full stack (Traefik, OAuth2 Proxy, PostgreSQL, Keycloak, Jigsaw panel)
+9. Wait for PostgreSQL and Keycloak to become healthy
+10. Update Keycloak client redirect URIs to match your domain
+11. Run database migrations (`drizzle-kit push`)
+12. Validate SSL certificates for the panel and auth domains
 
 If you've already cloned the repo, run the script directly:
 
@@ -42,9 +68,11 @@ If you've already cloned the repo, run the script directly:
 sudo ./install.sh
 ```
 
+> **Note:** The installer sets `.env` file permissions to `600` to protect secrets. On reruns, it preserves previously generated passwords.
+
 ## DNS Setup
 
-Point three A records to your server's public IP:
+Point three A records to your server's public IP **before** running the installer:
 
 | Record | Type | Value |
 |--------|------|-------|
@@ -53,6 +81,8 @@ Point three A records to your server's public IP:
 | `traefik.panel.example.com` | A | `<your-server-ip>` |
 
 Each site you create will also need its own A record pointing to the same IP.
+
+The installer validates DNS resolution against public DNS (Cloudflare) before proceeding. If public DNS is unreachable, it falls back to the local resolver but warns about private/loopback results. You can skip DNS checks with `SKIP_DNS_CHECK=1 sudo ./install.sh`.
 
 ## Manual Install
 
@@ -68,13 +98,16 @@ cp .env.example .env
 nano .env
 
 # 3. Generate secrets for .env
-#    POSTGRES_PASSWORD:       openssl rand -base64 32 | tr -d '/+='
-#    SESSION_SECRET:          openssl rand -hex 32
-#    KEYCLOAK_CLIENT_SECRET:  openssl rand -base64 48 | tr -d '/+='
+#    POSTGRES_PASSWORD:           openssl rand -base64 32 | tr -d '/+='
+#    SESSION_SECRET:              openssl rand -hex 32
+#    KEYCLOAK_CLIENT_SECRET:      openssl rand -base64 48 | tr -d '/+='
+#    OAUTH2_PROXY_COOKIE_SECRET:  openssl rand -base64 32
 
-# 4. Patch the Keycloak realm with your client secret and admin email
-sed -i "s|JIGSAW_CLIENT_SECRET_PLACEHOLDER|<your-client-secret>|" keycloak/jigsaw-realm.json
-sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|<your-email>|" keycloak/jigsaw-realm.json
+# 4. Patch the Keycloak realm with your values
+sed -i "s|JIGSAW_CLIENT_SECRET_PLACEHOLDER|<your-client-secret>|g" keycloak/jigsaw-realm.json
+sed -i "s|JIGSAW_ADMIN_EMAIL_PLACEHOLDER|<your-email>|g" keycloak/jigsaw-realm.json
+sed -i "s|JIGSAW_PANEL_DOMAIN_PLACEHOLDER|<your-panel-domain>|g" keycloak/jigsaw-realm.json
+sed -i "s|JIGSAW_ADMIN_PASSWORD_PLACEHOLDER|<your-keycloak-admin-password>|g" keycloak/jigsaw-realm.json
 
 # 5. Create data directories
 mkdir -p data/sites data/databases data/postgres docker/compose
@@ -91,17 +124,7 @@ docker compose up -d
 docker compose exec jigsaw npm run db:push
 ```
 
-## Publish Docker Images
-
-Build and push images from your workstation or CI:
-
-```bash
-docker build -t ghcr.io/03c/jigsaw/panel:latest .
-docker build -t ghcr.io/03c/jigsaw/php:8.4 docker/templates/web/
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
-docker push ghcr.io/03c/jigsaw/panel:latest
-docker push ghcr.io/03c/jigsaw/php:8.4
-```
+> **Important:** Make sure all four placeholders in `keycloak/jigsaw-realm.json` are replaced. The realm file is modified in-place -- the installer does this automatically but manual setup requires explicit `sed` commands for each placeholder.
 
 ## Post-Install
 
@@ -109,202 +132,299 @@ docker push ghcr.io/03c/jigsaw/php:8.4
 2. Log in with username **admin** and the Keycloak admin password you entered during install
 3. You're now in the Jigsaw dashboard as an admin
 4. To create additional users, go to `https://auth.panel.example.com` and use the Keycloak admin console
+5. The Traefik dashboard is available at `https://traefik.panel.example.com` (protected by Keycloak via OAuth2 Proxy)
 
-## Troubleshooting
+## Upgrading
 
-If Keycloak fails with `password authentication failed for user "jigsaw"`, your PostgreSQL data was initialized with a different password than the one in `.env`.
-
-For a fresh install, reset PostgreSQL data and rerun:
-
-```bash
-docker compose down && sudo rm -rf data/postgres && sudo ./install.sh
-```
-
-If Traefik logs `client version 1.24 is too old. Minimum supported API version is 1.44`, update to the latest repo and recreate containers:
+To upgrade an existing Jigsaw installation to the latest version:
 
 ```bash
-git pull && docker compose down && docker compose up -d
-```
+cd /opt/jigsaw
 
-If install times out waiting for SSL certificates, verify panel/auth/traefik domains resolve to this server and that ports 80/443 are reachable from the internet.
+# Pull the latest code
+git pull
 
-If `/auth/login` returns `Unexpected Server Error` or `Authentication is temporarily unavailable`, Keycloak is not ready from the panel container yet. Check:
+# Pull the latest Docker images
+docker compose pull
 
-```bash
-docker compose logs -f keycloak jigsaw
-docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/jigsaw/.well-known/openid-configuration').then((r)=>r.text().then((t)=>console.log(r.status,t.slice(0,120)))).catch((e)=>{console.error(e);process.exit(1)})"
-```
+# Apply any database schema changes
+docker compose exec jigsaw npm run db:push
 
-If Keycloak shows `Invalid parameter: redirect_uri`, update the `jigsaw-panel` client redirect URI to exactly:
-
-`https://<your-panel-domain>/auth/callback`
-
-Then restart the panel:
-
-```bash
-docker compose restart jigsaw
-```
-
-If the browser shows `ERR_TOO_MANY_REDIRECTS` after login, clear cookies for `server.jigsawhost.com` and `auth.server.jigsawhost.com`, then retry using the exact configured panel domain (not IP or alternate host).
-
-If logs include `OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED` with issuer mismatch (`expected http://keycloak:8080/...` vs `issuer https://auth.<domain>/...`), pull the latest config and recreate the panel:
-
-```bash
-git pull && docker compose up -d --force-recreate jigsaw
-```
-
-If certificate names look wrong after changing TLS domain settings, recreate Traefik certificates:
-
-```bash
-docker compose down
-docker volume rm $(docker volume ls -q | grep traefik_letsencrypt)
+# Recreate containers with the new images
 docker compose up -d
 ```
+
+Alternatively, rerun the installer which handles all of the above (it preserves your existing `.env` secrets):
+
+```bash
+sudo ./install.sh
+```
+
+> **Note:** `drizzle-kit push` is non-destructive -- it only adds new columns/tables and never drops existing data. Always back up your database before upgrading in production.
 
 ## Architecture
 
 ```
 Internet
    |
-[Traefik]  ports 80/443, auto-SSL
+[Traefik]  ports 80/443, auto-SSL via Let's Encrypt
    |
-   ├── Jigsaw Panel  (React Router 7, Node.js)
-   ├── Keycloak      (authentication)
-   ├── PostgreSQL     (shared: panel data + Keycloak data)
+   ├── panel.example.com
+   │   └── Jigsaw Panel  (React Router 7, Node.js, port 3000)
    │
-   ├── site-a_web    (Nginx + PHP-FPM)   ┐
-   ├── site-a_db     (MariaDB)           ├─ isolated network per site
-   ├── site-a_sftp   (optional)          ┘
+   ├── auth.panel.example.com
+   │   └── Keycloak      (OIDC/PKCE authentication, port 8080)
    │
-   ├── site-b_web                        ┐
-   ├── site-b_db                         ├─ isolated network per site
-   └── ...                               ┘
+   ├── traefik.panel.example.com
+   │   └── Traefik Dashboard  (protected by OAuth2 Proxy + Keycloak)
+   │
+   └── site-domains...
+       ├── site-a_web    (Nginx + PHP-FPM)   ┐
+       ├── site-a_db     (MariaDB)           ├─ isolated network per site
+       ├── site-a_sftp   (optional, port 2200+) ┘
+       │
+       ├── site-b_web                        ┐
+       ├── site-b_db                         ├─ isolated network per site
+       └── ...                               ┘
+
+Internal services (not internet-facing):
+   ├── PostgreSQL 17  (shared: Jigsaw panel data + Keycloak data)
+   └── OAuth2 Proxy   (forward-auth for Traefik dashboard)
+
+Networks:
+   ├── traefik_public   (Traefik, OAuth2 Proxy, Keycloak, Jigsaw, site web containers)
+   ├── jigsaw_internal  (PostgreSQL, Keycloak, Jigsaw)
+   └── jigsaw_<slug>_net  (per-site isolated network)
 ```
 
-## Configuration
+### Data Flow
 
-All configuration is in the `.env` file. See [`.env.example`](.env.example) for all available options.
+1. All HTTP/HTTPS traffic enters through Traefik on ports 80 (redirected to 443) and 443
+2. Traefik terminates TLS using Let's Encrypt certificates (HTTP challenge)
+3. Requests are routed by `Host()` header to the appropriate backend
+4. The Jigsaw panel communicates with Docker via the host socket to orchestrate site containers
+5. Each site's web container is connected to both the site's isolated network and `traefik_public`
+6. Database containers are only connected to their site's isolated network (not internet-accessible)
 
-| Variable | Description |
-|----------|-------------|
-| `PANEL_DOMAIN` | Domain for the panel (Keycloak is at `auth.<domain>`) |
-| `ACME_EMAIL` | Email for Let's Encrypt certificate notifications |
-| `POSTGRES_PASSWORD` | PostgreSQL password (auto-generated) |
-| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password |
-| `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel |
-| `KEYCLOAK_CONSOLE_URL` | URL used for admin Keycloak navigation links |
-| `TRAEFIK_DASHBOARD_URL` | URL used for admin Traefik navigation links |
-| `SITE_WEB_IMAGE_TEMPLATE` | Template used for site web images (default `jigsaw-php:{phpVersion}`) |
-| `SITE_DB_IMAGE` | Database image for new site DB containers (default `mariadb:lts`) |
-| `SITE_SFTP_IMAGE` | Image for per-site SFTP containers (default `atmoz/sftp`) |
-| `SITES_BASE_PATH_HOST` | Host base path for site folders (default `/home`) |
-| `SITES_BASE_PATH_PANEL` | Mounted path inside panel container for writing site files |
-| `DOCKER_SOCKET_PATH` | Docker daemon socket override (useful for Windows local dev) |
-| `SESSION_SECRET` | Encryption key for session cookies |
+## Configuration Reference
+
+All configuration is in the `.env` file. See [`.env.example`](.env.example) for the production template, or [`.env.local.example`](.env.local.example) for local development.
+
+### Production Variables (`.env`)
+
+| Variable | Description | Default / Notes |
+|----------|-------------|-----------------|
+| `PANEL_DOMAIN` | Domain for the panel (Keycloak at `auth.<domain>`, Traefik at `traefik.<domain>`) | Required |
+| `ACME_EMAIL` | Email for Let's Encrypt certificate notifications | Required |
+| `POSTGRES_USER` | PostgreSQL username | `jigsaw` |
+| `POSTGRES_PASSWORD` | PostgreSQL password | Auto-generated by `install.sh` |
+| `KEYCLOAK_ADMIN` | Keycloak admin console username | `admin` |
+| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password | Set during install |
+| `KEYCLOAK_CLIENT_ID` | OIDC client ID shared between Keycloak and the panel | `jigsaw-panel` |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client secret shared between Keycloak and the panel | Auto-generated by `install.sh` |
+| `KEYCLOAK_CONSOLE_URL` | URL used for admin Keycloak navigation links | `https://auth.<PANEL_DOMAIN>` |
+| `TRAEFIK_DASHBOARD_URL` | URL used for admin Traefik navigation links | `https://traefik.<PANEL_DOMAIN>/dashboard/` |
+| `OAUTH2_PROXY_COOKIE_SECRET` | Secret for OAuth2 Proxy session cookies (protects Traefik dashboard) | Auto-generated by `install.sh` |
+| `SITE_WEB_IMAGE_TEMPLATE` | Docker image template for site web containers | `jigsaw-php:{phpVersion}` |
+| `SITE_DB_IMAGE` | Docker image for site database containers | `mariadb:lts` |
+| `SITE_SFTP_IMAGE` | Docker image for per-site SFTP containers | `atmoz/sftp` |
+| `SITES_BASE_PATH_HOST` | Host filesystem path for site folders | `/home` |
+| `SITES_BASE_PATH_PANEL` | Mounted path inside the panel container for writing site files | `/host-home` |
+| `DOCKER_SOCKET_PATH` | Docker daemon socket override | `/var/run/docker.sock` (Linux) |
+| `SESSION_SECRET` | Encryption key for panel session cookies | Auto-generated by `install.sh` |
+
+### Local Development Variables (`.env.local`)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NODE_ENV` | Node environment | `development` |
+| `PANEL_URL` | App URL for OIDC callback generation | `http://localhost:5173` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://jigsaw:jigsaw_secret@localhost:5432/jigsaw` |
+| `KEYCLOAK_ISSUER_URL` | Internal Keycloak realm URL for server-to-server OIDC calls | `http://localhost:8080/realms/jigsaw` |
+| `KEYCLOAK_PUBLIC_URL` | Browser-facing Keycloak realm URL (used for authorization redirects) | Same as `KEYCLOAK_ISSUER_URL` |
+| `KEYCLOAK_CLIENT_ID` | OIDC client ID | `jigsaw-panel` |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client secret | `dev-jigsaw-client-secret` |
+| `KEYCLOAK_CONSOLE_URL` | Keycloak admin console URL for sidebar links | `http://localhost:8080` |
+| `SESSION_SECRET` | Session cookie signing key | `dev-session-secret-change-me` |
+
+> **Note:** In production, `KEYCLOAK_ISSUER_URL` is derived from the compose environment (`https://auth.<PANEL_DOMAIN>/realms/jigsaw`). In local dev, both the panel and the browser use `localhost:8080`, so `KEYCLOAK_ISSUER_URL` and `KEYCLOAK_PUBLIC_URL` are typically the same.
+
+## Database Schema
+
+The panel uses PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/). The schema is defined in `app/models/schema.ts`.
+
+### Tables
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Panel users synced from Keycloak. Fields: `id`, `keycloak_id`, `email`, `name`, `role` (admin/user), `max_sites` (default 5), timestamps. |
+| `sites` | Hosted websites. Fields: `id`, `user_id` (FK), `name`, `slug` (unique), `domain`, `status` (creating/running/stopped/error), `php_version`, `network_name`, timestamps. |
+| `services` | Docker containers per site (web, database, sftp). Fields: `id`, `site_id` (FK), `type`, `container_id`, `container_name`, `status`, `config` (JSONB), timestamps. |
+| `activity_log` | Audit trail. Fields: `id`, `user_id` (nullable FK), `action`, `details`, timestamp. |
+
+### Relationships
+
+- A **user** has many **sites** and **activity log** entries
+- A **site** has many **services** (one web, one database, optional SFTP)
+- Deleting a user cascades to their sites; deleting a site cascades to its services
 
 ## Project Structure
 
 ```
 jigsaw/
 ├── app/
-│   ├── components/         # UI components (sidebar, cards, badges)
-│   ├── lib/                # Server utilities
-│   │   ├── auth.server.ts      # Keycloak OIDC (PKCE flow)
-│   │   ├── db.server.ts        # PostgreSQL via Drizzle ORM
-│   │   ├── docker.server.ts    # Docker container orchestration
-│   │   ├── images.server.ts    # Site image resolution and env overrides
-│   │   ├── session.server.ts   # Cookie session + auth guards
-│   │   ├── crypto.server.ts    # Password/slug/UUID generation
-│   │   └── stats.server.ts     # System & Docker stats
+│   ├── components/             # UI components
+│   │   ├── layout/
+│   │   │   └── sidebar.tsx         # Navigation sidebar
+│   │   └── ui/
+│   │       ├── stat-card.tsx       # Dashboard stat cards
+│   │       └── status-badge.tsx    # Site/service status indicators
+│   ├── lib/                    # Server-side utilities (*.server.ts)
+│   │   ├── admin-links.server.ts   # Keycloak/Traefik sidebar URL resolution
+│   │   ├── auth.server.ts         # Keycloak OIDC (PKCE flow via openid-client v6)
+│   │   ├── crypto.server.ts       # Password/slug/UUID generation
+│   │   ├── db.server.ts           # PostgreSQL connection via Drizzle ORM
+│   │   ├── docker.server.ts       # Docker container orchestration (dockerode)
+│   │   ├── images.server.ts       # Site image resolution and env overrides
+│   │   ├── session.server.ts      # Cookie session + auth/admin guards
+│   │   └── stats.server.ts        # System & Docker stats (systeminformation)
 │   ├── models/
-│   │   └── schema.ts           # Drizzle schema (users, sites, services, activity_log)
-│   ├── routes/                 # React Router 7 routes
-│   │   ├── auth.*.tsx          # Login, callback, logout
-│   │   ├── dashboard.*.tsx     # User dashboard, site management
-│   │   └── admin.*.tsx         # Admin panel, user management, server stats
-│   ├── root.tsx
-│   └── routes.ts               # Route config
+│   │   └── schema.ts              # Drizzle schema (users, sites, services, activity_log)
+│   ├── routes/                    # React Router 7 file-based routes
+│   │   ├── home.tsx               # Root redirect (→ /dashboard or /auth/login)
+│   │   ├── auth.login.tsx         # Initiates Keycloak OIDC login
+│   │   ├── auth.callback.tsx      # Handles OIDC callback, creates session
+│   │   ├── auth.logout.tsx        # Destroys session
+│   │   ├── dashboard.tsx          # Dashboard layout (requires auth)
+│   │   ├── dashboard._index.tsx   # Dashboard home: site list, quick stats
+│   │   ├── dashboard.sites.new.tsx    # Create new site form
+│   │   ├── dashboard.sites.$id.tsx    # Site detail: start/stop/restart/delete/SFTP
+│   │   ├── dashboard.profile.tsx  # User profile
+│   │   ├── admin.tsx              # Admin layout (requires admin role)
+│   │   ├── admin._index.tsx       # Admin dashboard: server stats, Docker stats
+│   │   ├── admin.users.tsx        # User management list
+│   │   ├── admin.users.$id.tsx    # Edit user (role, max sites)
+│   │   ├── admin.sites.tsx        # All sites overview
+│   │   └── admin.server-mgmt.tsx  # Docker management, resource pruning
+│   ├── app.css                    # Global styles (Tailwind CSS 4)
+│   ├── root.tsx                   # HTML shell, fonts, Outlet, error boundary
+│   └── routes.ts                  # Central route configuration
 ├── docker/
-│   ├── templates/web/          # Nginx + PHP-FPM Dockerfile & config
-│   ├── templates/site/         # Default site bootstrap templates
-│   └── init-keycloak-db.sql    # Creates Keycloak DB in shared PostgreSQL
+│   ├── templates/
+│   │   ├── web/                   # Per-site Nginx + PHP-FPM image
+│   │   │   ├── Dockerfile
+│   │   │   ├── default.conf       # Nginx config
+│   │   │   └── supervisord.conf   # Supervisor for Nginx + PHP-FPM
+│   │   └── site/
+│   │       └── index.html         # Default landing page template for new sites
+│   └── init-keycloak-db.sql       # Creates Keycloak database in shared PostgreSQL
 ├── keycloak/
-│   └── jigsaw-realm.json       # Keycloak realm with roles, client, default admin
-├── docker-compose.yml          # Full stack: Traefik + PostgreSQL + Keycloak + Panel
-├── docker-compose.local.yml    # Local-only PostgreSQL + Keycloak services
+│   └── jigsaw-realm.json          # Realm template with roles, client, placeholders
 ├── scripts/
-│   └── prepare-dev-realm.mjs   # Generates local Keycloak realm import file
-├── Dockerfile                  # Multi-stage build for the panel (Node 22)
-├── drizzle.config.ts
-├── install.sh                  # Interactive installer
-├── .env.example
-├── package.json
-└── tsconfig.json
+│   └── prepare-dev-realm.mjs      # Generates dev realm JSON from template + .env.local
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml     # CI: builds and pushes panel + PHP images to GHCR
+├── Dockerfile                     # Multi-stage build for the panel (Node 22 Alpine)
+├── docker-compose.yml             # Production: Traefik + OAuth2 Proxy + PostgreSQL + Keycloak + Panel
+├── docker-compose.local.yml       # Local dev: PostgreSQL + Keycloak only
+├── drizzle.config.ts              # Drizzle Kit config (schema path, DB URL)
+├── install.sh                     # Interactive production installer
+├── .env.example                   # Production environment template
+├── .env.local.example             # Local development environment template
+├── package.json                   # Dependencies and npm scripts
+├── tsconfig.json                  # TypeScript config (strict, path aliases)
+├── vite.config.ts                 # Vite: Tailwind CSS 4 + React Router + tsconfig paths
+└── react-router.config.ts         # React Router config (SSR enabled)
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend + Backend | React Router 7 (SSR, loaders, actions) |
-| Database (panel) | PostgreSQL 17 via Drizzle ORM |
-| Database (sites) | MariaDB 11 (one per site) |
-| Auth | Keycloak 26 (OIDC/PKCE) |
-| Reverse Proxy | Traefik v3 (auto-SSL) |
-| Container Mgmt | dockerode (Node.js Docker SDK) |
-| Styling | Tailwind CSS 4 |
-| Runtime | Node.js 22 LTS |
+| Frontend + Backend | [React Router 7](https://reactrouter.com/) (SSR, loaders, actions) |
+| Database (panel) | [PostgreSQL 17](https://www.postgresql.org/) via [Drizzle ORM](https://orm.drizzle.team/) |
+| Database (sites) | [MariaDB](https://mariadb.org/) LTS (one per site) |
+| Auth | [Keycloak 26](https://www.keycloak.org/) (OIDC/PKCE via [openid-client v6](https://github.com/panva/openid-client)) |
+| Reverse Proxy | [Traefik v3](https://traefik.io/) (auto-SSL via Let's Encrypt) |
+| Dashboard Auth | [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) (protects Traefik dashboard) |
+| Container Management | [dockerode](https://github.com/apocas/dockerode) (Node.js Docker SDK) |
+| System Monitoring | [systeminformation](https://github.com/sebhildebrandt/systeminformation) |
+| Styling | [Tailwind CSS 4](https://tailwindcss.com/) |
+| Runtime | [Node.js 22 LTS](https://nodejs.org/) |
+| CI/CD | [GitHub Actions](https://github.com/features/actions) (Docker image publishing to GHCR) |
 
 ## Development
 
-For a fast local dev loop (recommended), run the app on your host with HMR and only run backing services in Docker.
+For a fast local dev loop, run the app on your host with HMR and only run backing services (PostgreSQL + Keycloak) in Docker.
 
-### Local Dev (Windows-friendly)
+### Prerequisites
+
+- Node.js 22+
+- Docker and Docker Compose
+- npm (included with Node.js)
+
+### Quick Start
 
 ```bash
+# Install dependencies
 npm install
 
-# Create local env file
+# Create local env file (only needed on first setup)
 cp .env.local.example .env.local
 
-# Start local services (PostgreSQL + Keycloak)
-npm run dev:services:up
-
-# Push the schema
-npm run db:push
+# Bootstrap: starts PostgreSQL + Keycloak in Docker, then pushes the DB schema
+npm run dev:bootstrap
 
 # Start the dev server with HMR
 npm run dev
 ```
 
-PowerShell equivalent for env copy:
+The app runs at `http://localhost:5173` and Keycloak at `http://localhost:8080`.
+
+### Default Local Credentials
+
+| Service | Username | Password |
+|---------|----------|----------|
+| Keycloak admin console | `admin` | `admin` (change in `.env.local`) |
+
+### npm Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Vite dev server with HMR (port 5173) |
+| `npm run build` | Production build (output in `build/`) |
+| `npm run start` | Serve production build (port 3000) |
+| `npm run typecheck` | Run `react-router typegen` then `tsc` |
+| `npm run dev:bootstrap` | Start local services + push DB schema (combines `dev:services:up` + `db:push`) |
+| `npm run dev:services:up` | Start PostgreSQL + Keycloak via Docker Compose |
+| `npm run dev:services:down` | Stop local services |
+| `npm run dev:services:logs` | Tail local service logs |
+| `npm run dev:realm` | Regenerate `keycloak/jigsaw-realm.dev.json` from template (called by `dev:services:up`) |
+| `npm run db:push` | Push Drizzle schema to the database (non-destructive) |
+| `npm run db:generate` | Generate Drizzle migration files |
+| `npm run db:migrate` | Run Drizzle migrations |
+| `npm run db:studio` | Open Drizzle Studio (database GUI) |
+
+### How Local Dev Works
+
+1. `npm run dev:realm` reads `.env.local` and generates `keycloak/jigsaw-realm.dev.json` from the template `keycloak/jigsaw-realm.json`, replacing placeholders with local dev values
+2. `docker-compose.local.yml` starts PostgreSQL and Keycloak with the dev realm file bind-mounted
+3. Keycloak imports the realm on first boot (takes 15-30 seconds to initialize)
+4. The Vite dev server runs the React Router app with SSR, connecting to the local PostgreSQL and Keycloak instances
+5. The app communicates with Docker via the host socket for container orchestration
+
+### PowerShell (Windows)
 
 ```powershell
 Copy-Item .env.local.example .env.local
 ```
 
-The app runs at `http://localhost:5173` and Keycloak at `http://localhost:8080`.
+If using Docker Desktop on Windows, uncomment `DOCKER_SOCKET_PATH=//./pipe/docker_engine` in `.env.local`.
 
-Default local credentials:
+### Full-Stack Parity
 
-- Keycloak admin user: `admin`
-- Keycloak admin password: `admin` (change in `.env.local`)
-
-When you are done:
-
-```bash
-npm run dev:services:down
-```
-
-To tail local service logs:
-
-```bash
-npm run dev:services:logs
-```
-
-### Optional Full-Stack Parity Locally
-
-If you want to test Traefik + TLS + router labels exactly like production, run the full stack in Docker (`docker compose up -d`) and point local domains accordingly.
+To test Traefik + TLS + router labels exactly like production, run the full stack in Docker (`docker compose up -d`) and point local domains accordingly.
 
 ## Useful Commands
 
@@ -319,14 +439,17 @@ npm run dev:services:down
 npm run dev:services:logs
 npm run dev:bootstrap
 
-# Restart the panel after code changes
+# Restart the panel after code changes (production)
 docker compose restart jigsaw
 
-# Pull and restart the panel
+# Pull latest panel image and restart
 docker compose pull jigsaw && docker compose up -d jigsaw
 
-# Run database migrations
+# Run database migrations (production)
 docker compose exec jigsaw npm run db:push
+
+# Open Drizzle Studio for local database inspection
+npm run db:studio
 
 # Open a shell in the panel container
 docker compose exec jigsaw sh
@@ -336,7 +459,143 @@ docker compose down
 
 # Stop everything and remove volumes (destructive!)
 docker compose down -v
+
+# Type-check the codebase
+npm run typecheck
 ```
+
+## Publish Docker Images
+
+The CI workflow (`.github/workflows/docker-publish.yml`) automatically builds and pushes Docker images to GHCR on every push to `main` or on version tags (`v*`). You can also trigger it manually via `workflow_dispatch`.
+
+### Images Published
+
+| Image | Source | Tags |
+|-------|--------|------|
+| `ghcr.io/03c/jigsaw/panel` | `./Dockerfile` | `latest` (main branch), `v*` (tags), `sha-*` |
+| `ghcr.io/03c/jigsaw/php` | `./docker/templates/web/Dockerfile` | `8.4`, `sha-*` |
+
+### Manual Build and Push
+
+```bash
+docker build -t ghcr.io/03c/jigsaw/panel:latest .
+docker build -t ghcr.io/03c/jigsaw/php:8.4 docker/templates/web/
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+docker push ghcr.io/03c/jigsaw/panel:latest
+docker push ghcr.io/03c/jigsaw/php:8.4
+```
+
+## Security
+
+### Session Security
+
+- Session cookies are encrypted with `SESSION_SECRET` and configured as `httpOnly`, `sameSite: lax`, and `secure` in production
+- Session lifetime is 7 days
+- All authentication flows use PKCE (Proof Key for Code Exchange) to prevent authorization code interception
+
+### Credential Generation
+
+- Database passwords, SFTP credentials, and slugs are generated using Node.js `crypto.randomBytes`
+- The install script uses `openssl rand` for all generated secrets
+- The `.env` file is created with `chmod 600` permissions
+
+### Network Isolation
+
+- Each site runs in its own Docker network (`jigsaw_<slug>_net`)
+- Database containers are only attached to the site's isolated network (not internet-facing)
+- Web containers are connected to both the site network and `traefik_public` for routing
+- The Traefik dashboard is protected by OAuth2 Proxy + Keycloak forward-auth
+
+### Recommendations
+
+- Change the default Keycloak admin password immediately after install
+- Enable MFA in Keycloak for admin accounts
+- Keep the Docker socket (`/var/run/docker.sock`) access restricted -- the panel container requires it for orchestration
+- Use strong, unique values for `SESSION_SECRET`, `KEYCLOAK_CLIENT_SECRET`, and `POSTGRES_PASSWORD`
+- Regularly update Docker images and the host OS
+- Back up `data/postgres`, `data/sites`, and `data/databases` directories
+
+## Troubleshooting
+
+### Keycloak: "password authentication failed for user jigsaw"
+
+Your PostgreSQL data was initialized with a different password than the one in `.env`. For a fresh install, reset PostgreSQL data and rerun:
+
+```bash
+docker compose down && sudo rm -rf data/postgres && sudo ./install.sh
+```
+
+### Traefik: "client version 1.24 is too old"
+
+Update to the latest repo and recreate containers:
+
+```bash
+git pull && docker compose down && docker compose up -d
+```
+
+### SSL certificate timeout
+
+If install times out waiting for SSL certificates, verify:
+1. `panel.example.com`, `auth.panel.example.com`, and `traefik.panel.example.com` DNS A records point to this server
+2. Ports 80 and 443 are reachable from the internet (check firewall rules)
+3. Let's Encrypt rate limits haven't been hit (check `docker compose logs traefik`)
+
+### Keycloak not ready: "Unexpected Server Error" or "Authentication is temporarily unavailable"
+
+Keycloak needs 15-60 seconds to fully initialize on first boot. Check:
+
+```bash
+docker compose logs -f keycloak jigsaw
+docker compose exec -T jigsaw node -e "fetch('http://keycloak:8080/realms/jigsaw/.well-known/openid-configuration').then((r)=>r.text().then((t)=>console.log(r.status,t.slice(0,120)))).catch((e)=>{console.error(e);process.exit(1)})"
+```
+
+### Keycloak: "Invalid parameter: redirect_uri"
+
+Update the `jigsaw-panel` client redirect URI in the Keycloak admin console (`https://auth.<domain>`) to exactly:
+
+```
+https://<your-panel-domain>/auth/callback
+```
+
+Then restart the panel:
+
+```bash
+docker compose restart jigsaw
+```
+
+### ERR_TOO_MANY_REDIRECTS after login
+
+Clear cookies for your panel domain and auth subdomain, then retry using the exact configured panel domain (not IP or alternate hostname).
+
+### OIDC issuer mismatch
+
+If logs include `OAUTH_JSON_ATTRIBUTE_COMPARISON_FAILED` with issuer mismatch (`expected http://keycloak:8080/...` vs `issuer https://auth.<domain>/...`), pull the latest config and recreate the panel:
+
+```bash
+git pull && docker compose up -d --force-recreate jigsaw
+```
+
+### TLS certificate names wrong after domain change
+
+Recreate Traefik certificates:
+
+```bash
+docker compose down
+docker volume rm $(docker volume ls -q | grep traefik_letsencrypt)
+docker compose up -d
+```
+
+### Local dev: Keycloak not responding
+
+After `npm run dev:services:up`, Keycloak takes 15-30 seconds to import the realm and start. Verify readiness:
+
+```bash
+curl -sf http://localhost:8080/realms/jigsaw/.well-known/openid-configuration | head -c 120
+```
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the detailed feature plan and development priorities.
 
 ## Licence
 
