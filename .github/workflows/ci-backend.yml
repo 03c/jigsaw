@@ -1,13 +1,14 @@
-name: Backend tests
+name: "CI: Backend (Vitest & typecheck)"
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: backend-tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-backend-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

@@ -1,13 +1,14 @@
-name: Docker & image QA
+name: "CI: Docker (images & lint)"
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: docker-qa-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-docker-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

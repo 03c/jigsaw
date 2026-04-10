@@ -48,7 +48,7 @@ See `README.md` for full user-facing docs, architecture, and configuration refer
 
 - **Docker is required**: The application talks to Docker via socket (`/var/run/docker.sock`) to manage site containers. Docker must be installed and the daemon running. Without Docker, the dev server will start but site management operations will fail.
 - **Keycloak startup**: Keycloak can take 15-30 seconds to fully initialize after `dev:services:up`. The dev server will error on login redirects until Keycloak's realm endpoint is ready. Verify with: `curl -sf http://localhost:8080/realms/jigsaw/.well-known/openid-configuration`
-- **Automated tests**: Vitest (`npm test`, `npm run test:integration` with Docker), Playwright E2E (`npm run test:e2e`). See `vitest.config.ts`, `playwright.config.ts`, and `.github/workflows/ci-*.yml`.
+- **Automated tests**: Vitest (`npm test`, `npm run test:integration` with Docker), Playwright E2E (`npm run test:e2e`). See `vitest.config.ts`, `playwright.config.ts`, and `.github/workflows/ci-{docker,backend,frontend,e2e}.yml`.
 - **Linting/typechecking**: Run `npm run typecheck` (runs `react-router typegen && tsc`). There is no ESLint or Prettier configuration.
 - **Build**: `npm run build` produces a production build under `build/server/` and `build/client/`.
 - **Default dev credentials**: Keycloak admin user is `admin` / `admin` (set in `.env.local`).
@@ -127,7 +127,9 @@ Four tables defined in `app/models/schema.ts`:
 
 ## CI/CD
 
-Single GitHub Actions workflow (`.github/workflows/docker-publish.yml`):
+**CI (tests & Docker checks):** `ci-docker.yml`, `ci-backend.yml`, `ci-frontend.yml`, and `ci-e2e.yml` run on pull requests targeting `main` and on pushes to `main`.
+
+**Publish** (`.github/workflows/docker-publish.yml`):
 
 - **Triggers:** push to `main`, version tags (`v*`), manual `workflow_dispatch`
 - **Registry:** GHCR (`ghcr.io/03c/jigsaw`)
