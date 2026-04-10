@@ -1,0 +1,39 @@
+name: Docker build verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build panel image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: jigsaw/panel:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build PHP site image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/templates/web
+          file: ./docker/templates/web/Dockerfile
+          push: false
+          tags: jigsaw/php:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

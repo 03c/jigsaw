@@ -1,0 +1,74 @@
+# Minimal stack for CI: PostgreSQL + Keycloak + panel image built from the repo Dockerfile.
+# Usage (from repo root):
+#   docker compose -f docker-compose.ci.yml --env-file .env.ci up -d --build
+#   docker compose -f docker-compose.ci.yml exec jigsaw npm run db:push
+#   PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:e2e
+#
+# Realm file: run `node --env-file=.env.ci ./scripts/prepare-dev-realm.mjs`
+# then `cp keycloak/jigsaw-realm.dev.json keycloak/jigsaw-realm.ci.json` (CI does this).
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: jigsaw
+      POSTGRES_PASSWORD: jigsaw_secret
+      POSTGRES_DB: jigsaw
+    volumes:
+      - ./docker/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jigsaw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: jigsaw
+      KC_DB_PASSWORD: jigsaw_secret
+      KC_HOSTNAME: http://localhost:18080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./keycloak/jigsaw-realm.ci.json:/opt/keycloak/data/import/jigsaw-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  jigsaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://jigsaw:jigsaw_secret@postgres:5432/jigsaw
+      SESSION_SECRET: ci-session-secret-not-for-production
+      PANEL_URL: http://localhost:3000
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/jigsaw
+      KEYCLOAK_PUBLIC_URL: http://localhost:18080/realms/jigsaw
+      KEYCLOAK_CONSOLE_URL: http://localhost:18080
+      KEYCLOAK_CLIENT_ID: jigsaw-panel
+      KEYCLOAK_CLIENT_SECRET: ci-client-secret
+      DOCKER_API_VERSION: "1.44"
+      SITE_WEB_IMAGE_TEMPLATE: jigsaw-php:{phpVersion}
+      SITE_DB_IMAGE: mariadb:lts
+      SITE_SFTP_IMAGE: atmoz/sftp
+      SITES_BASE_PATH_HOST: /tmp/jigsaw-ci-sites
+      SITES_BASE_PATH_PANEL: /tmp/jigsaw-ci-sites
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
