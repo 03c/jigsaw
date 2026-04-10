@@ -52,6 +52,8 @@ services:
       PANEL_URL: http://localhost:3000
       SESSION_SECRET: ci-session-secret-change-me
       NODE_ENV: production
+      # Playwright visual test: deterministic 503 page via /auth/login?e2e_503=1
+      ALLOW_E2E_503_HOOK: "true"
     ports:
       - "3000:3000"
     depends_on:

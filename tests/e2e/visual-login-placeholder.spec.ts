@@ -1,18 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+const maintenanceCopy =
+  "Authentication is temporarily unavailable. Keycloak may still be starting. Please try again in 30 seconds.";
+
 /**
- * Visual regression boilerplate: captures the panel’s Keycloak-unavailable page when
- * `/auth/login` returns 503 (common in CI before IdP is ready). When Keycloak responds,
- * the browser leaves the app origin — skip the snapshot to avoid flaky external UIs.
+ * Visual regression: plain-text 503 from the auth login loader when OIDC setup fails.
+ * In CI the stack sets ALLOW_E2E_503_HOOK so we can request the same response via a
+ * query param without depending on Keycloak being down (avoids flaky redirects).
  */
 test.describe("visual: auth login surface", () => {
   test("503 maintenance page snapshot", async ({ page }) => {
-    const response = await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
-    test.skip(response?.status() !== 503, "Keycloak is up; skipping 503-only snapshot");
+    let response = await page.goto("/auth/login?e2e_503=1", {
+      waitUntil: "domcontentloaded",
+    });
+    if (response?.status() !== 503) {
+      response = await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+    }
+    test.skip(response?.status() !== 503, "503 page not shown (Keycloak reachable); skip snapshot");
 
-    await expect(
-      page.getByText(/Authentication is temporarily unavailable/i),
-    ).toBeVisible();
+    await expect(page.getByText(maintenanceCopy)).toBeVisible();
 
     await expect(page).toHaveScreenshot("auth-login-unavailable.png", {
       fullPage: true,
