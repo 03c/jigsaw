@@ -16,6 +16,7 @@ RUN npm run build
 
 FROM node:22-alpine
 # Install required system packages for systeminformation
+# hadolint ignore=DL3018
 RUN apk add --no-cache procps util-linux
 
 COPY ./package.json package-lock.json /app/

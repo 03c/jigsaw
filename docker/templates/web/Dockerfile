@@ -1,7 +1,8 @@
 FROM php:8.4-fpm AS php
 
 # Install PHP extensions commonly needed for CMS/web apps
-RUN apt-get update && apt-get install -y \
+# hadolint ignore=DL3008,DL3015
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
@@ -10,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     libonig-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+    && docker-php-ext-install -j"$(nproc)" \
         mysqli \
         pdo_mysql \
         gd \
@@ -42,6 +43,7 @@ COPY --from=php /usr/local/etc/php-fpm.conf /usr/local/etc/php-fpm.conf
 COPY --from=php /usr/local/etc/php-fpm.d /usr/local/etc/php-fpm.d
 
 # Install runtime dependencies for PHP in the nginx image
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     libpng \
     libjpeg-turbo \

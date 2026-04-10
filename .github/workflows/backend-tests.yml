@@ -1,0 +1,56 @@
+name: Backend tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: backend-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vitest-and-typecheck:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: jigsaw
+          POSTGRES_PASSWORD: jigsaw_secret
+          POSTGRES_DB: jigsaw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jigsaw"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://jigsaw:jigsaw_secret@localhost:5432/jigsaw
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Apply database schema
+        run: npm run db:push
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Vitest (unit + integration)
+        run: npm run test:unit

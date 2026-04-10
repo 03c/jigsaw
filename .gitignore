@@ -16,6 +16,11 @@
 # Generated compose files
 /docker/compose/
 /keycloak/jigsaw-realm.dev.json
+/keycloak/jigsaw-realm.ci.json
+
+# Playwright
+/playwright-report/
+/test-results/
 
 # IDE
 .idea/

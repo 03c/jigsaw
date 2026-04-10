@@ -6,6 +6,9 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
+  // Health (no auth, for probes / CI)
+  route("health", "routes/health.tsx"),
+
   // Home - redirects to dashboard or login
   index("routes/home.tsx"),
 

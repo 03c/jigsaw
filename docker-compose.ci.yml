@@ -1,0 +1,78 @@
+# CI-only stack: panel + Postgres + Keycloak (no Traefik). Used by e2e-docker-tests workflow.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: jigsaw_postgres_ci
+    environment:
+      POSTGRES_USER: jigsaw
+      POSTGRES_PASSWORD: jigsaw_secret
+      POSTGRES_DB: jigsaw
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jigsaw"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: jigsaw_keycloak_ci
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: jigsaw
+      KC_DB_PASSWORD: jigsaw_secret
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/jigsaw-realm.ci.json:/opt/keycloak/data/import/jigsaw-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  jigsaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jigsaw-panel:ci
+    container_name: jigsaw_panel_ci
+    environment:
+      DATABASE_URL: postgres://jigsaw:jigsaw_secret@postgres:5432/jigsaw
+      PANEL_URL: http://127.0.0.1:3000
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/jigsaw
+      KEYCLOAK_PUBLIC_URL: http://keycloak:8080/realms/jigsaw
+      KEYCLOAK_CONSOLE_URL: http://keycloak:8080
+      KEYCLOAK_CLIENT_ID: jigsaw-panel
+      KEYCLOAK_CLIENT_SECRET: ci-test-client-secret
+      SESSION_SECRET: ci-session-secret-must-be-at-least-32-chars-long
+      NODE_ENV: production
+      DOCKER_API_VERSION: "1.44"
+      SITE_WEB_IMAGE_TEMPLATE: jigsaw-php:{phpVersion}
+      SITE_DB_IMAGE: mariadb:lts
+      SITE_SFTP_IMAGE: atmoz/sftp
+      SITES_BASE_PATH_HOST: /tmp/jigsaw-ci-sites
+      SITES_BASE_PATH_PANEL: /tmp/jigsaw-ci-sites
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - jigsaw_ci_sites:/tmp/jigsaw-ci-sites
+      - ./docker/compose:/app/docker/compose
+      - ./docker/templates:/app/docker/templates
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+volumes:
+  jigsaw_ci_sites:
