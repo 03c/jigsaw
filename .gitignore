@@ -7,6 +7,12 @@
 /.react-router/
 /build/
 
+# Tests & coverage
+/coverage/
+/playwright-report/
+/test-results/
+/blob-report/
+
 # Data directories (persistent volumes, not committed)
 /data/sites/
 /data/databases/

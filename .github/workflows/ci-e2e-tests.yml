@@ -1,0 +1,83 @@
+name: E2E tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Playwright (smoke + visual)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: jigsaw
+          POSTGRES_PASSWORD: jigsaw_secret
+          POSTGRES_DB: jigsaw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jigsaw -d jigsaw"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Push DB schema
+        env:
+          DATABASE_URL: postgres://jigsaw:jigsaw_secret@127.0.0.1:5432/jigsaw
+        run: npm run db:push
+
+      - name: Start dev server
+        env:
+          DATABASE_URL: postgres://jigsaw:jigsaw_secret@127.0.0.1:5432/jigsaw
+          NODE_ENV: development
+          SESSION_SECRET: e2e-ci-session-secret
+          PANEL_URL: http://localhost:5173
+          KEYCLOAK_ISSUER_URL: http://localhost:8080/realms/jigsaw
+          KEYCLOAK_PUBLIC_URL: http://localhost:8080/realms/jigsaw
+          KEYCLOAK_CONSOLE_URL: http://localhost:8080
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5173/ >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:5173/ >/dev/null
+
+      - name: Run Playwright
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/

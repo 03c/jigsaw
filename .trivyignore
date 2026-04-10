@@ -1,0 +1,1 @@
+# Allow baseline noise from upstream base images; tighten as you harden Dockerfiles.

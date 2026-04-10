@@ -2,9 +2,14 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "~/models/schema";
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  "postgres://jigsaw:jigsaw_secret@localhost:5432/jigsaw";
+export function getDatabaseUrl(): string {
+  return (
+    process.env.DATABASE_URL ||
+    "postgres://jigsaw:jigsaw_secret@localhost:5432/jigsaw"
+  );
+}
+
+const connectionString = getDatabaseUrl();
 
 const client = postgres(connectionString, {
   max: 10,
