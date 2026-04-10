@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local development — Jigsaw</title>
+    <meta name="description" content="Set up Node, Docker, and Keycloak for Jigsaw local development with Vite HMR." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html" aria-current="page">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Local development</h1>
+        <p class="lead">
+          Run PostgreSQL and Keycloak in Docker, then the React Router app on the host with hot module replacement
+          (port 5173). Docker must be available for site management features (container create/start/stop).
+        </p>
+
+        <h2>Prerequisites</h2>
+        <ul>
+          <li>Node.js 22+</li>
+          <li>npm (bundled with Node)</li>
+          <li>Docker and Docker Compose</li>
+        </ul>
+
+        <h2>Bootstrap</h2>
+        <pre><code>git clone https://github.com/03c/jigsaw.git
+cd jigsaw
+npm install
+cp .env.local.example .env.local
+npm run dev:bootstrap</code></pre>
+        <p>
+          <code>dev:bootstrap</code> starts services from <code>docker-compose.local.yml</code>, regenerates the dev
+          Keycloak realm from <code>.env.local</code>, and runs <code>drizzle-kit push</code> against your local DB.
+        </p>
+
+        <h2>Dev server</h2>
+        <pre><code>npm run dev</code></pre>
+        <p>Application: <code>http://localhost:5173</code> · Keycloak: <code>http://localhost:8080</code></p>
+        <div class="note">
+          Keycloak can take 15–30 seconds after containers start. Until the realm endpoint responds, login redirects may
+          fail. Check:
+          <code>curl -sf http://localhost:8080/realms/jigsaw/.well-known/openid-configuration | head -c 120</code>
+        </div>
+
+        <h2>Useful npm scripts</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Script</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>npm run dev</code></td>
+              <td>Vite + React Router dev server (HMR)</td>
+            </tr>
+            <tr>
+              <td><code>npm run build</code></td>
+              <td>Production build to <code>build/</code></td>
+            </tr>
+            <tr>
+              <td><code>npm run start</code></td>
+              <td>Serve production build (port 3000)</td>
+            </tr>
+            <tr>
+              <td><code>npm run typecheck</code></td>
+              <td>Route typegen + TypeScript</td>
+            </tr>
+            <tr>
+              <td><code>npm run dev:services:up</code> / <code>down</code></td>
+              <td>Start/stop local PostgreSQL + Keycloak</td>
+            </tr>
+            <tr>
+              <td><code>npm run db:push</code></td>
+              <td>Apply Drizzle schema (non-destructive)</td>
+            </tr>
+            <tr>
+              <td><code>npm run db:studio</code></td>
+              <td>Drizzle Studio GUI</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Windows (Docker Desktop)</h2>
+        <p>
+          Copy <code>.env.local.example</code> to <code>.env.local</code>. If needed, set
+          <code>DOCKER_SOCKET_PATH=//./pipe/docker_engine</code> for the Docker API.
+        </p>
+
+        <h2>Further reading</h2>
+        <ul>
+          <li><a href="https://github.com/03c/jigsaw/blob/main/AGENTS.md">AGENTS.md</a> — contributor-oriented guide</li>
+          <li><a href="contributing.html">Contributing</a></li>
+        </ul>
+
+        <p><a href="index.html">← Home</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>

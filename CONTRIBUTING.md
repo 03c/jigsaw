@@ -27,6 +27,8 @@ npm run dev
 
 See [AGENTS.md](AGENTS.md) for detailed developer documentation including the route map, database schema, and project conventions.
 
+The [`docs/`](docs/) folder is the **documentation website** (static HTML/CSS, deployable to GitHub Pages). When you change user-facing install or operations docs, update both the root [README](README.md) and the matching page under `docs/` so the site stays in sync.
+
 ## Code Style
 
 ### TypeScript

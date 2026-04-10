@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jigsaw architecture</title>
+    <meta name="description" content="How Traefik, Keycloak, PostgreSQL, and per-site Docker networks fit together in Jigsaw." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap inner">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">J</span>
+          Jigsaw
+        </a>
+        <nav class="nav-main" aria-label="Primary">
+          <a href="index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="architecture.html" aria-current="page">Architecture</a>
+          <a href="configuration.html">Configuration</a>
+          <a href="development.html">Development</a>
+          <a href="security.html">Security</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+          <a href="https://github.com/03c/jigsaw">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+        <h1>Architecture</h1>
+        <p class="lead">
+          Traffic enters through Traefik on ports 80 and 443. The panel and Keycloak share PostgreSQL. Each hosted site
+          can run Nginx + PHP-FPM, an optional MariaDB, and optional SFTP — each on an isolated bridge network.
+        </p>
+
+        <h2>High-level diagram</h2>
+        <div class="diagram" role="img" aria-label="Architecture diagram">
+Internet
+   |
+[Traefik]  :80 / :443 — Let&apos;s Encrypt (HTTP-01)
+   |
+   |-- PANEL_DOMAIN          → Jigsaw panel (Node, SSR)
+   |-- auth.PANEL_DOMAIN     → Keycloak (OIDC)
+   |-- traefik.PANEL_DOMAIN  → Traefik API (OAuth2 Proxy + Keycloak)
+   |
+   +-- customer site hostnames → per-site web (Nginx + PHP) on traefik_public + site network
+
+Internal:
+   PostgreSQL 17 — panel DB + Keycloak DB
+   OAuth2 Proxy — forward-auth for Traefik dashboard
+
+Per site (example):
+   jigsaw_&lt;slug&gt;_net — web + db (+ optional SFTP)
+        </div>
+
+        <h2>Data flow</h2>
+        <ol>
+          <li>Traefik terminates TLS and routes by <code>Host</code> header.</li>
+          <li>The panel talks to Docker via the host socket to create networks, volumes, and containers.</li>
+          <li>Site web containers join <code>traefik_public</code> (for routing) and a dedicated site network.</li>
+          <li>Database containers attach only to the site network (not exposed to the public internet by default).</li>
+        </ol>
+
+        <h2>On-disk layout (typical)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>data/postgres</code></td>
+              <td>PostgreSQL data directory (panel + Keycloak)</td>
+            </tr>
+            <tr>
+              <td><code>data/sites</code></td>
+              <td>Site files (bind-mounted into web containers)</td>
+            </tr>
+            <tr>
+              <td><code>data/databases</code></td>
+              <td>Per-site MariaDB data</td>
+            </tr>
+            <tr>
+              <td><code>docker/compose</code></td>
+              <td>Generated compose snippets for site stacks</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Panel data model (summary)</h2>
+        <p>
+          The panel stores users, sites, services (web / database / sftp), and an activity log in PostgreSQL. See
+          <a href="https://github.com/03c/jigsaw/blob/main/app/models/schema.ts">app/models/schema.ts</a> for the Drizzle
+          schema.
+        </p>
+
+        <p><a href="index.html">← Home</a></p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p><a href="index.html">Home</a> · <a href="https://github.com/03c/jigsaw">GitHub</a></p>
+      </div>
+    </footer>
+  </body>
+</html>
