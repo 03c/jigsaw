@@ -48,7 +48,7 @@ See `README.md` for full user-facing docs, architecture, and configuration refer
 
 - **Docker is required**: The application talks to Docker via socket (`/var/run/docker.sock`) to manage site containers. Docker must be installed and the daemon running. Without Docker, the dev server will start but site management operations will fail.
 - **Keycloak startup**: Keycloak can take 15-30 seconds to fully initialize after `dev:services:up`. The dev server will error on login redirects until Keycloak's realm endpoint is ready. Verify with: `curl -sf http://localhost:8080/realms/jigsaw/.well-known/openid-configuration`
-- **No test suite**: The repo has no automated tests (no test framework, no test scripts in `package.json`). Manual testing is the current workflow.
+- **Automated tests**: Vitest (`npm test`, `npm run test:integration` with Docker), Playwright E2E (`npm run test:e2e`). See `vitest.config.ts`, `playwright.config.ts`, and `.github/workflows/ci-*.yml`.
 - **Linting/typechecking**: Run `npm run typecheck` (runs `react-router typegen && tsc`). There is no ESLint or Prettier configuration.
 - **Build**: `npm run build` produces a production build under `build/server/` and `build/client/`.
 - **Default dev credentials**: Keycloak admin user is `admin` / `admin` (set in `.env.local`).
