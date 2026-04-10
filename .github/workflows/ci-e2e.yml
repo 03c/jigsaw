@@ -1,13 +1,14 @@
-name: E2E (Docker stack)
+name: "CI: E2E (Playwright)"
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: e2e-docker-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
