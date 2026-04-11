@@ -11,9 +11,10 @@ ARG WORDPRESS_VERSION=6.7.2
 
 USER root
 
-# Base image is nginx:alpine — ensure www-data exists for PHP-FPM and chown
+# Base image may define group www-data (nginx) without the user — create group only if absent
 RUN if ! id -u www-data >/dev/null 2>&1; then \
-      addgroup -S www-data && adduser -S -D -H -G www-data www-data; \
+      grep -q '^www-data:' /etc/group 2>/dev/null || addgroup -S www-data; \
+      adduser -S -D -H -G www-data www-data; \
     fi
 
 RUN apk add --no-cache curl unzip \
