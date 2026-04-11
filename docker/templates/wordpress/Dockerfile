@@ -1,5 +1,5 @@
 # Customer WordPress runtime: extends the Jigsaw PHP image (Nginx + PHP-FPM) with WordPress core baked in.
-# CI builds the `php` image first, then this image FROM that tag.
+# Pin the WordPress version and verify the official MD5 checksum (reproducible builds).
 #
 # Build (from repo root):
 #   docker build -f docker/templates/wordpress/Dockerfile \
@@ -8,14 +8,18 @@
 ARG BASE_IMAGE=ghcr.io/03c/jigsaw/php:8.4
 FROM ${BASE_IMAGE}
 
+ARG WORDPRESS_VERSION=6.7.2
+
 USER root
 
-RUN apk add --no-cache curl unzip \
-    && curl -fsSL https://wordpress.org/latest.zip -o /tmp/wp.zip \
+RUN apk add --no-cache curl unzip coreutils \
+    && curl -fsSL "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.zip" -o /tmp/wp.zip \
+    && curl -fsSL "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.zip.md5" -o /tmp/wp.zip.md5 \
+    && EXPECTED=$(tr -d '\r\n' < /tmp/wp.zip.md5) \
+    && echo "${EXPECTED}  /tmp/wp.zip" | md5sum -c - \
     && unzip -q /tmp/wp.zip -d /opt/jigsaw \
-    && rm /tmp/wp.zip \
+    && rm /tmp/wp.zip /tmp/wp.zip.md5 \
     && mv /opt/jigsaw/wordpress /opt/jigsaw/wordpress-baked \
     && chown -R www-data:www-data /opt/jigsaw/wordpress-baked
 
-# Panel sets this env on WordPress site containers so the entrypoint copies core onto an empty volume once.
 ENV JIGSAW_WORDPRESS_BAKED_PATH=/opt/jigsaw/wordpress-baked
