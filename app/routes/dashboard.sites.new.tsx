@@ -19,10 +19,10 @@ import {
 } from "~/lib/docker.server";
 import path from "node:path";
 import {
-  waitForMysqlHost,
+  waitForMysqlInContainer,
   copyWordPressCoreFromImage,
   writeWordPressConfig,
-  chownWebRootForWebContainer,
+  secureWordPressConfigInWebContainer,
 } from "~/lib/wordpress.server";
 import { resolveWordPressImage } from "~/lib/images.server";
 
@@ -139,7 +139,7 @@ export async function action({ request }: { request: Request }) {
       });
 
       if (installWordPress) {
-        await waitForMysqlHost(`jigsaw_${slug}_db`, 3306);
+        await waitForMysqlInContainer(`jigsaw_${slug}_db`, dbRootPassword);
         await copyWordPressCoreFromImage({
           webImage: resolveWordPressImage(phpVersion),
           hostWebRoot,
@@ -168,7 +168,7 @@ export async function action({ request }: { request: Request }) {
     });
 
     if (installWordPress) {
-      await chownWebRootForWebContainer(`jigsaw_${slug}_web`);
+      await secureWordPressConfigInWebContainer(`jigsaw_${slug}_web`);
     }
 
     await db.insert(services).values({

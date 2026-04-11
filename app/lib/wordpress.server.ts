@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import net from "node:net";
 import { docker } from "~/lib/docker.server";
 
 function wpSalt(): string {
@@ -9,35 +8,70 @@ function wpSalt(): string {
 }
 
 /**
- * Wait until MariaDB accepts TCP connections on the given host:port (Docker network).
+ * Run a command inside a container and return its exit code (panel uses Docker API; no TCP to DB from panel).
  */
-export async function waitForMysqlHost(
-  host: string,
-  port: number,
+async function execInContainer(
+  containerName: string,
+  cmd: string[],
+  env: string[] = []
+): Promise<number> {
+  const container = docker.getContainer(containerName);
+  const execInstance = await container.exec({
+    Cmd: cmd,
+    Env: env,
+    AttachStdout: true,
+    AttachStderr: true,
+    User: "root",
+  });
+
+  return new Promise((resolve, reject) => {
+    execInstance.start({ hijack: true, Tty: false }, (err, stream) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      if (!stream) {
+        resolve(-1);
+        return;
+      }
+      stream.resume();
+      stream.on("end", () => {
+        execInstance.inspect((inspectErr, data) => {
+          if (inspectErr) reject(inspectErr);
+          else resolve(data?.ExitCode ?? -1);
+        });
+      });
+      stream.on("error", reject);
+    });
+  });
+}
+
+/**
+ * Wait until MariaDB in the site DB container accepts connections (via `mysqladmin ping` inside that container).
+ * The panel is not on the site's Docker network, so we must not probe `jigsaw_<slug>_db:3306` from the panel process.
+ */
+export async function waitForMysqlInContainer(
+  containerName: string,
+  rootPassword: string,
   opts: { timeoutMs?: number; intervalMs?: number } = {}
 ): Promise<void> {
   const timeoutMs = opts.timeoutMs ?? 120_000;
   const intervalMs = opts.intervalMs ?? 2_000;
   const deadline = Date.now() + timeoutMs;
+  const env = [`MYSQL_ROOT_PASSWORD=${rootPassword}`];
 
   while (Date.now() < deadline) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const socket = net.createConnection({ host, port }, () => {
-        socket.end();
-        resolve(true);
-      });
-      socket.on("error", () => resolve(false));
-      socket.setTimeout(5_000, () => {
-        socket.destroy();
-        resolve(false);
-      });
-    });
-    if (ok) return;
+    const code = await execInContainer(
+      containerName,
+      ["sh", "-c", 'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" 2>/dev/null'],
+      env
+    );
+    if (code === 0) return;
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 
   throw new Error(
-    `Timed out waiting for MySQL at ${host}:${port}. Check the database container logs.`
+    `Timed out waiting for MariaDB in ${containerName}. Check the database container logs.`
   );
 }
 
@@ -71,7 +105,7 @@ define('DB_NAME', '${params.dbName.replace(/'/g, "\\'")}');
 define('DB_USER', '${params.dbUser.replace(/'/g, "\\'")}');
 define('DB_PASSWORD', '${params.dbPassword.replace(/'/g, "\\'")}');
 define('DB_HOST', '${params.dbHost.replace(/'/g, "\\'")}');
-define('DB_CHARSET', 'utf8');
+define('DB_CHARSET', 'utf8mb4');
 define('DB_COLLATE', '');
 
 ${keyLines}
@@ -139,13 +173,17 @@ export async function writeWordPressConfig(params: {
 }
 
 /**
- * Ensure the customer web container can read wp-config.php (owned by panel uid on host).
+ * Tighten wp-config.php permissions inside the web container (avoid world-readable secrets on the host mount).
  */
-export async function chownWebRootForWebContainer(webContainerName: string): Promise<void> {
+export async function secureWordPressConfigInWebContainer(webContainerName: string): Promise<void> {
   try {
     const container = docker.getContainer(webContainerName);
     const exec = await container.exec({
-      Cmd: ["chown", "-R", "www-data:www-data", "/var/www/html"],
+      Cmd: [
+        "sh",
+        "-c",
+        "test -f /var/www/html/wp-config.php && chown www-data:www-data /var/www/html/wp-config.php && chmod 640 /var/www/html/wp-config.php",
+      ],
       AttachStdout: true,
       AttachStderr: true,
       User: "root",
@@ -160,11 +198,12 @@ export async function chownWebRootForWebContainer(webContainerName: string): Pro
           resolve();
           return;
         }
+        stream.resume();
         stream.on("end", () => resolve());
         stream.on("error", reject);
       });
     });
   } catch {
-    // Best-effort; entrypoint also adjusts permissions on container start
+    // Best-effort
   }
 }
