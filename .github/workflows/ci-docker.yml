@@ -100,13 +100,12 @@ jobs:
           load: true
           tags: jigsaw-php:ci
 
-      # build-push-action uses BuildKit, which resolves unqualified FROM names against Docker Hub
-      # (docker.io/library/jigsaw-php:ci). Pass the loaded image by ID so the WordPress stage uses the local image.
+      # Classic `docker build` uses the local daemon image store (jigsaw-php:ci from the step above).
+      # buildx interprets digest-only BASE_IMAGE as docker.io/library/sha256:... and fails to pull.
       - name: Build WordPress site image (no push)
         run: |
-          BASE_ID=$(docker image inspect -f '{{.Id}}' jigsaw-php:ci)
-          docker buildx build --load \
-            --build-arg "BASE_IMAGE=${BASE_ID}" \
+          docker build \
+            --build-arg BASE_IMAGE=jigsaw-php:ci \
             -f docker/templates/wordpress/Dockerfile \
             -t jigsaw-wordpress:ci \
             .
