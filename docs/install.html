@@ -53,6 +53,7 @@
             <li><a href="#one-line">One-line install</a></li>
             <li><a href="#what-it-does">What the installer does</a></li>
             <li><a href="#after">After install</a></li>
+            <li><a href="#first-site">Sign up, DNS, and WordPress</a></li>
             <li><a href="#upgrade">Upgrading</a></li>
             <li><a href="#manual">Manual install (advanced)</a></li>
           </ul>
@@ -172,10 +173,40 @@
         <h2 id="after">After install</h2>
         <ol>
           <li>Open <code>https://&lt;PANEL_DOMAIN&gt;</code> — you will be redirected to Keycloak.</li>
-          <li>Sign in with username <code>admin</code> and the Keycloak admin password you set.</li>
-          <li>Manage users at <code>https://auth.&lt;PANEL_DOMAIN&gt;</code> (Keycloak admin console).</li>
+          <li>
+            Sign in with username <code>admin</code> and the Keycloak admin password you set, or use
+            <strong>Register</strong> to create a new account (new users get the <code>user</code> role and can create
+            sites up to the configured limit).
+          </li>
+          <li>Manage users and realm security settings at <code>https://auth.&lt;PANEL_DOMAIN&gt;</code> (Keycloak admin console).</li>
           <li>Open the Traefik dashboard at <code>https://traefik.&lt;PANEL_DOMAIN&gt;</code> (OAuth2 Proxy + Keycloak).</li>
         </ol>
+
+        <h2 id="first-site">Sign up, DNS, and WordPress</h2>
+        <p>
+          <strong>Self-service sign-up</strong> is enabled in the default Keycloak realm so visitors can register without
+          the admin console. To require invitations only, disable registration in Keycloak:
+          Realm settings → Login → User registration.
+        </p>
+        <p>
+          <strong>Per-site DNS:</strong> before creating a site for <code>blog.example.com</code>, add an
+          <strong>A record</strong> for that hostname to your server&apos;s public IP (same IP as the panel). Traefik
+          issues TLS certificates per hostname once DNS resolves correctly.
+        </p>
+        <p><strong>WordPress (MVP flow):</strong></p>
+        <ol>
+          <li>In the panel, go to <strong>Create site</strong>, enter a site name and domain.</li>
+          <li>Keep <strong>Create database</strong> and <strong>Install WordPress</strong> checked (defaults).</li>
+          <li>
+            The panel provisions MariaDB, downloads WordPress from <code>wordpress.org</code>, writes
+            <code>wp-config.php</code>, then starts the web container.
+          </li>
+          <li>Open <code>https://your-domain</code> and complete WordPress&apos;s web installer (title, admin user).</li>
+        </ol>
+        <p class="note">
+          New Keycloak accounts use <code>verifyEmail=false</code> in the imported realm so users can sign in
+          immediately. Turn on email verification in Keycloak if your deployment needs it.
+        </p>
 
         <h2 id="upgrade">Upgrading</h2>
         <pre><code>cd /opt/jigsaw

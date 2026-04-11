@@ -51,6 +51,10 @@
         <h2>Authentication and sessions</h2>
         <ul>
           <li>OIDC with PKCE via <code>openid-client</code> — the panel does not store user passwords</li>
+          <li>
+            The default Keycloak realm allows <strong>self-service registration</strong>; disable it in Keycloak if you
+            only want admin-created accounts (Realm settings → Login → User registration)
+          </li>
           <li>Session cookie: HTTP-only, <code>SameSite=lax</code>, <code>secure</code> in production</li>
           <li>Session lifetime: 7 days (configurable in application code)</li>
         </ul>
