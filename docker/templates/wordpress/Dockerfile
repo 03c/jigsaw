@@ -15,8 +15,9 @@ USER root
 RUN apk add --no-cache curl unzip coreutils \
     && curl -fsSL "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.zip" -o /tmp/wp.zip \
     && curl -fsSL "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.zip.md5" -o /tmp/wp.zip.md5 \
-    && EXPECTED=$(tr -d '\r\n' < /tmp/wp.zip.md5) \
-    && echo "${EXPECTED}  /tmp/wp.zip" | md5sum -c - \
+    && EXPECTED=$(tr -d '\r\n ' < /tmp/wp.zip.md5) \
+    && ACTUAL=$(md5sum /tmp/wp.zip | awk '{print $1}') \
+    && test "$ACTUAL" = "$EXPECTED" || (echo "MD5 mismatch: actual=${ACTUAL} expected=${EXPECTED}" >&2; exit 1) \
     && unzip -q /tmp/wp.zip -d /opt/jigsaw \
     && rm /tmp/wp.zip /tmp/wp.zip.md5 \
     && mv /opt/jigsaw/wordpress /opt/jigsaw/wordpress-baked \
