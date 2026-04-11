@@ -18,7 +18,13 @@ import {
   findAvailableSftpPort,
 } from "~/lib/docker.server";
 import path from "node:path";
-import { waitForMysqlHost, installWordPressFiles } from "~/lib/wordpress.server";
+import {
+  waitForMysqlHost,
+  copyWordPressCoreFromImage,
+  writeWordPressConfig,
+  chownWebRootForWebContainer,
+} from "~/lib/wordpress.server";
+import { resolveWordPressImage } from "~/lib/images.server";
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
@@ -98,7 +104,9 @@ export async function action({ request }: { request: Request }) {
     await createSiteNetwork(slug);
 
     const SITES_BASE_PATH_PANEL = process.env.SITES_BASE_PATH_PANEL || "/host-home";
+    const SITES_BASE_PATH_HOST = process.env.SITES_BASE_PATH_HOST || "/home";
     const panelWebRoot = path.join(SITES_BASE_PATH_PANEL, ownerSegment, slug, "public_html");
+    const hostWebRoot = path.join(SITES_BASE_PATH_HOST, ownerSegment, slug, "public_html");
 
     if (createDatabase) {
       // Create database container
@@ -132,7 +140,11 @@ export async function action({ request }: { request: Request }) {
 
       if (installWordPress) {
         await waitForMysqlHost(`jigsaw_${slug}_db`, 3306);
-        await installWordPressFiles({
+        await copyWordPressCoreFromImage({
+          webImage: resolveWordPressImage(phpVersion),
+          hostWebRoot,
+        });
+        await writeWordPressConfig({
           panelWebRoot,
           dbHost: `jigsaw_${slug}_db`,
           dbName,
@@ -152,7 +164,12 @@ export async function action({ request }: { request: Request }) {
       dbUser,
       dbPassword,
       dbRootPassword,
+      wordPress: installWordPress,
     });
+
+    if (installWordPress) {
+      await chownWebRootForWebContainer(`jigsaw_${slug}_web`);
+    }
 
     await db.insert(services).values({
       id: generateId(),
@@ -164,6 +181,7 @@ export async function action({ request }: { request: Request }) {
       config: {
         phpVersion,
         domain,
+        wordPress: installWordPress,
       },
     });
 
@@ -345,8 +363,8 @@ export default function NewSite() {
               <span>
                 <span className="font-medium text-gray-900 dark:text-white">Install WordPress</span>
                 <span className="block text-xs text-gray-500 dark:text-gray-400">
-                  Downloads WordPress and writes wp-config.php. After creation, open your domain to finish the five-minute
-                  install wizard.
+                  Uses the WordPress container image (official core + Nginx + PHP), copies files into your site folder,
+                  writes wp-config.php, then starts your site container. Open your domain to finish the install wizard.
                 </span>
               </span>
             </label>

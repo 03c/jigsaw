@@ -33,7 +33,7 @@ The [`docs/`](docs/) directory is a **static HTML/CSS site** (no build step) sui
 ## Features
 
 - **Site management** -- create, start, stop, restart, and delete websites from the browser
-- **WordPress-ready** -- optional one-click WordPress download and `wp-config.php` when you create a site with a database (finish setup in the browser at your domain)
+- **WordPress-ready** -- optional WordPress sites use a dedicated **WordPress container image** (official core + same Nginx/PHP stack as generic PHP sites); the panel copies core into the site folder, writes `wp-config.php`, and runs that image for the web container
 - **Isolated containers** -- every site gets its own Docker network and web server, with optional database
 - **Auto-generated credentials** -- database and SFTP passwords are created with cryptographic randomness
 - **Automatic SSL** -- Traefik provisions and renews Let's Encrypt certificates for every site
@@ -77,7 +77,7 @@ The installer will:
 4. Auto-generate all secrets (database passwords, session key, OIDC client secret, OAuth2 proxy cookie secret), reusing existing `.env` secrets on reruns
 5. Validate DNS records for the panel and auth subdomains
 6. Patch the Keycloak realm JSON with your domain, client secret, and admin credentials
-7. Pull prebuilt panel and PHP images from GHCR
+7. Pull prebuilt panel, PHP, and WordPress site images from GHCR
 8. Start the full stack (Traefik, OAuth2 Proxy, PostgreSQL, Keycloak, Jigsaw panel)
 9. Wait for PostgreSQL and Keycloak to become healthy
 10. Update Keycloak client redirect URIs to match your domain
@@ -137,7 +137,9 @@ mkdir -p data/sites data/databases data/postgres docker/compose
 # 6. Pull prebuilt images
 docker pull ghcr.io/03c/jigsaw/panel:latest
 docker pull ghcr.io/03c/jigsaw/php:8.4
+docker pull ghcr.io/03c/jigsaw/wordpress:8.4
 docker tag ghcr.io/03c/jigsaw/php:8.4 jigsaw-php:8.4
+docker tag ghcr.io/03c/jigsaw/wordpress:8.4 jigsaw-wordpress:8.4
 
 # 7. Start the stack
 docker compose up -d
@@ -160,7 +162,7 @@ docker compose exec jigsaw npm run db:push
 
 1. In the panel, create an **A record** for your site hostname (e.g. `blog.example.com`) pointing to the same server IP as the panel
 2. **Dashboard → Create site**: enter a name and domain, keep **Create database** and **Install WordPress** enabled (default), submit
-3. Wait for provisioning (the panel downloads WordPress from `wordpress.org` and writes `wp-config.php` using the generated database credentials)
+3. Wait for provisioning: the panel copies WordPress core from the **WordPress site image** into your site folder, writes `wp-config.php`, and starts the `jigsaw-wordpress` web container (not a download inside the panel process)
 4. Open `https://your-site-domain` in a browser — complete WordPress’s install wizard (site title, admin user, password)
 5. Optional: enable **SFTP** on the site to upload themes/plugins, or use WordPress’s built-in updater
 
@@ -211,13 +213,13 @@ Internet
    │   └── Traefik Dashboard  (protected by OAuth2 Proxy + Keycloak)
    │
    └── site-domains...
-       ├── site-a_web    (Nginx + PHP-FPM)   ┐
-       ├── site-a_db     (MariaDB)           ├─ isolated network per site
-       ├── site-a_sftp   (optional, port 2200+) ┘
+       ├── site-a_web    (Nginx + PHP-FPM, or WordPress image)   ┐
+       ├── site-a_db     (MariaDB)                              ├─ isolated network per site
+       ├── site-a_sftp   (optional, port 2200+)                  ┘
        │
-       ├── site-b_web                        ┐
-       ├── site-b_db                         ├─ isolated network per site
-       └── ...                               ┘
+       ├── site-b_web                                              ┐
+       ├── site-b_db                                              ├─ isolated network per site
+       └── ...                                                    ┘
 
 Internal services (not internet-facing):
    ├── PostgreSQL 17  (shared: Jigsaw panel data + Keycloak data)
@@ -237,6 +239,7 @@ Networks:
 4. The Jigsaw panel communicates with Docker via the host socket to orchestrate site containers
 5. Each site's web container is connected to both the site's isolated network and `traefik_public`
 6. Database containers are only connected to their site's isolated network (not internet-accessible)
+7. **WordPress sites** use image `jigsaw-wordpress:8.4` (extends the PHP image with baked WordPress core). Customer files still live on the host under `/home/.../public_html` (bind-mounted); the image supplies the runtime and a one-time copy of core when the volume is empty
 
 ## Configuration Reference
 
@@ -257,7 +260,8 @@ All configuration is in the `.env` file. See [`.env.example`](.env.example) for 
 | `KEYCLOAK_CONSOLE_URL` | URL used for admin Keycloak navigation links | `https://auth.<PANEL_DOMAIN>` |
 | `TRAEFIK_DASHBOARD_URL` | URL used for admin Traefik navigation links | `https://traefik.<PANEL_DOMAIN>/dashboard/` |
 | `OAUTH2_PROXY_COOKIE_SECRET` | Secret for OAuth2 Proxy session cookies (protects Traefik dashboard) | Auto-generated by `install.sh` |
-| `SITE_WEB_IMAGE_TEMPLATE` | Docker image template for site web containers | `jigsaw-php:{phpVersion}` |
+| `SITE_WEB_IMAGE_TEMPLATE` | Docker image template for generic PHP site web containers | `jigsaw-php:{phpVersion}` |
+| `SITE_WORDPRESS_IMAGE_TEMPLATE` | Image for WordPress site web containers | `jigsaw-wordpress:{phpVersion}` |
 | `SITE_DB_IMAGE` | Docker image for site database containers | `mariadb:lts` |
 | `SITE_SFTP_IMAGE` | Docker image for per-site SFTP containers | `atmoz/sftp` |
 | `SITES_BASE_PATH_HOST` | Host filesystem path for site folders | `/home` |
@@ -349,6 +353,8 @@ jigsaw/
 │   │   │   ├── Dockerfile
 │   │   │   ├── default.conf       # Nginx config
 │   │   │   └── supervisord.conf   # Supervisor for Nginx + PHP-FPM
+│   │   ├── wordpress/             # WordPress site image (extends web image + baked WP core)
+│   │   │   └── Dockerfile
 │   │   └── site/
 │   │       └── index.html         # Default landing page template for new sites
 │   └── init-keycloak-db.sql       # Creates Keycloak database in shared PostgreSQL
@@ -358,7 +364,7 @@ jigsaw/
 │   └── prepare-dev-realm.mjs      # Generates dev realm JSON from template + .env.local
 ├── .github/
 │   └── workflows/
-│       └── docker-publish.yml     # CI: builds and pushes panel + PHP images to GHCR
+│       └── docker-publish.yml     # CI: builds and pushes panel, PHP, and WordPress images (GHCR; optional Docker Hub)
 ├── Dockerfile                     # Multi-stage build for the panel (Node 22 Alpine)
 ├── docker-compose.yml             # Production: Traefik + OAuth2 Proxy + PostgreSQL + Keycloak + Panel
 ├── docker-compose.local.yml       # Local dev: PostgreSQL + Keycloak only
@@ -508,15 +514,20 @@ The CI workflow (`.github/workflows/docker-publish.yml`) automatically builds an
 |-------|--------|------|
 | `ghcr.io/03c/jigsaw/panel` | `./Dockerfile` | `latest` (main branch), `v*` (tags), `sha-*` |
 | `ghcr.io/03c/jigsaw/php` | `./docker/templates/web/Dockerfile` | `8.4`, `sha-*` |
+| `ghcr.io/03c/jigsaw/wordpress` | `./docker/templates/wordpress/Dockerfile` (build-arg `BASE_IMAGE` = published `php:8.4`) | `8.4`, `sha-*` |
+
+The same tags can be mirrored to **Docker Hub** (`docker.io/03c/jigsaw/...`) by setting repository variable `PUBLISH_DOCKERHUB=true` and secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` on the repo (see `.github/workflows/docker-publish.yml`).
 
 ### Manual Build and Push
 
 ```bash
 docker build -t ghcr.io/03c/jigsaw/panel:latest .
 docker build -t ghcr.io/03c/jigsaw/php:8.4 docker/templates/web/
+docker build -f docker/templates/wordpress/Dockerfile --build-arg BASE_IMAGE=ghcr.io/03c/jigsaw/php:8.4 -t ghcr.io/03c/jigsaw/wordpress:8.4 .
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
 docker push ghcr.io/03c/jigsaw/panel:latest
 docker push ghcr.io/03c/jigsaw/php:8.4
+docker push ghcr.io/03c/jigsaw/wordpress:8.4
 ```
 
 ## Security

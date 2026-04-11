@@ -165,7 +165,10 @@
           <li>Generates or preserves secrets (<code>POSTGRES_PASSWORD</code>, <code>SESSION_SECRET</code>, OIDC and OAuth2 proxy secrets).</li>
           <li>Validates DNS for the panel and <code>auth.&lt;domain&gt;</code> when possible.</li>
           <li>Patches <code>keycloak/jigsaw-realm.json</code> with your domain and credentials.</li>
-          <li>Pulls panel and PHP images from <code>ghcr.io/03c/jigsaw/</code> (builds PHP image locally if pull fails).</li>
+          <li>
+            Pulls panel, PHP, and WordPress site images from <code>ghcr.io/03c/jigsaw/</code> (builds locally if pull
+            fails).
+          </li>
           <li>Runs <code>docker compose up -d</code>, waits for PostgreSQL and Keycloak, updates OIDC redirect URIs, runs <code>npm run db:push</code> in the panel container.</li>
           <li>Waits until HTTPS responds for the panel and auth hostnames.</li>
         </ol>
@@ -198,8 +201,9 @@
           <li>In the panel, go to <strong>Create site</strong>, enter a site name and domain.</li>
           <li>Keep <strong>Create database</strong> and <strong>Install WordPress</strong> checked (defaults).</li>
           <li>
-            The panel provisions MariaDB, downloads WordPress from <code>wordpress.org</code>, writes
-            <code>wp-config.php</code>, then starts the web container.
+            The panel provisions MariaDB, copies WordPress core from the <strong>WordPress site Docker image</strong>
+            into your site folder, writes <code>wp-config.php</code>, then starts the <code>jigsaw-wordpress</code> web
+            container (same Nginx + PHP stack as generic sites, with baked core in the image).
           </li>
           <li>Open <code>https://your-domain</code> and complete WordPress&apos;s web installer (title, admin user).</li>
         </ol>

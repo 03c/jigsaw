@@ -11,6 +11,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/03c/jigsaw
+  # Optional: set repository variable PUBLISH_DOCKERHUB=true and secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN to push the same tags to Docker Hub as well
+  DOCKERHUB_PREFIX: docker.io/03c/jigsaw
 
 jobs:
   publish:
@@ -32,11 +34,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        if: ${{ vars.PUBLISH_DOCKERHUB == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Extract metadata (panel)
         id: panel-meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_PREFIX }}/panel
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha
+
+      - name: Extract metadata (panel — multi-registry)
+        id: panel-meta-all
+        if: ${{ vars.PUBLISH_DOCKERHUB == 'true' }}
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE_PREFIX }}/panel
+            ${{ env.DOCKERHUB_PREFIX }}/panel
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
@@ -48,7 +71,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.panel-meta.outputs.tags }}
+          tags: ${{ vars.PUBLISH_DOCKERHUB == 'true' && steps.panel-meta-all.outputs.tags || steps.panel-meta.outputs.tags }}
           labels: ${{ steps.panel-meta.outputs.labels }}
 
       - name: Extract metadata (php)
@@ -60,11 +83,55 @@ jobs:
             type=raw,value=8.4
             type=sha
 
+      - name: Extract metadata (php — multi-registry)
+        id: php-meta-all
+        if: ${{ vars.PUBLISH_DOCKERHUB == 'true' }}
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE_PREFIX }}/php
+            ${{ env.DOCKERHUB_PREFIX }}/php
+          tags: |
+            type=raw,value=8.4
+            type=sha
+
       - name: Build and push php image
         uses: docker/build-push-action@v6
         with:
           context: ./docker/templates/web
           file: ./docker/templates/web/Dockerfile
           push: true
-          tags: ${{ steps.php-meta.outputs.tags }}
+          tags: ${{ vars.PUBLISH_DOCKERHUB == 'true' && steps.php-meta-all.outputs.tags || steps.php-meta.outputs.tags }}
           labels: ${{ steps.php-meta.outputs.labels }}
+
+      - name: Extract metadata (wordpress)
+        id: wp-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/wordpress
+          tags: |
+            type=raw,value=8.4
+            type=sha
+
+      - name: Extract metadata (wordpress — multi-registry)
+        id: wp-meta-all
+        if: ${{ vars.PUBLISH_DOCKERHUB == 'true' }}
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE_PREFIX }}/wordpress
+            ${{ env.DOCKERHUB_PREFIX }}/wordpress
+          tags: |
+            type=raw,value=8.4
+            type=sha
+
+      - name: Build and push wordpress image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/templates/wordpress/Dockerfile
+          build-args: |
+            BASE_IMAGE=${{ env.IMAGE_PREFIX }}/php:8.4
+          push: true
+          tags: ${{ vars.PUBLISH_DOCKERHUB == 'true' && steps.wp-meta-all.outputs.tags || steps.wp-meta.outputs.tags }}
+          labels: ${{ steps.wp-meta.outputs.labels }}
