@@ -1,11 +1,8 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import net from "node:net";
-import AdmZip from "adm-zip";
-
-const WORDPRESS_ZIP_URL = "https://wordpress.org/latest.zip";
+import { docker } from "~/lib/docker.server";
 
 function wpSalt(): string {
   return randomBytes(32).toString("base64url");
@@ -92,34 +89,44 @@ require_once ABSPATH . 'wp-settings.php';
 }
 
 /**
- * Download WordPress, extract into web root, and write wp-config.php (database must be reachable separately).
+ * Copy WordPress core from the published WordPress image into the site's web root on the Docker host.
+ * Uses a one-shot container with dockerode (no `docker` CLI required inside the panel image).
  */
-export async function installWordPressFiles(params: {
+export async function copyWordPressCoreFromImage(params: {
+  webImage: string;
+  /** Absolute host path, e.g. /home/owner/site/public_html (same path the daemon bind-mounts) */
+  hostWebRoot: string;
+}): Promise<void> {
+  await fs.mkdir(params.hostWebRoot, { recursive: true });
+
+  const container = await docker.createContainer({
+    Image: params.webImage,
+    Cmd: ["sh", "-c", "cp -a /opt/jigsaw/wordpress-baked/. /out/"],
+    HostConfig: {
+      Binds: [`${params.hostWebRoot}:/out`],
+      AutoRemove: true,
+    },
+  });
+
+  await container.start();
+  const wait = await container.wait();
+  if (wait.StatusCode !== 0) {
+    throw new Error(
+      `WordPress core copy failed (exit ${wait.StatusCode}). Ensure image ${params.webImage} exists on this host.`
+    );
+  }
+}
+
+/**
+ * Write wp-config.php after core files are on disk.
+ */
+export async function writeWordPressConfig(params: {
   panelWebRoot: string;
   dbHost: string;
   dbName: string;
   dbUser: string;
   dbPassword: string;
 }): Promise<void> {
-  await fs.mkdir(params.panelWebRoot, { recursive: true });
-
-  const res = await fetch(WORDPRESS_ZIP_URL);
-  if (!res.ok) {
-    throw new Error(`Failed to download WordPress: HTTP ${res.status}`);
-  }
-
-  const buf = Buffer.from(await res.arrayBuffer());
-  const zip = new AdmZip(buf);
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "jigsaw-wp-"));
-  try {
-    zip.extractAllTo(tmp, true);
-    const extracted = path.join(tmp, "wordpress");
-    await fs.access(extracted);
-    await fs.cp(extracted, params.panelWebRoot, { recursive: true });
-  } finally {
-    await fs.rm(tmp, { recursive: true, force: true });
-  }
-
   const wpConfig = buildWpConfigPhp({
     dbHost: params.dbHost,
     dbName: params.dbName,
@@ -129,4 +136,35 @@ export async function installWordPressFiles(params: {
   });
 
   await fs.writeFile(path.join(params.panelWebRoot, "wp-config.php"), wpConfig, "utf-8");
+}
+
+/**
+ * Ensure the customer web container can read wp-config.php (owned by panel uid on host).
+ */
+export async function chownWebRootForWebContainer(webContainerName: string): Promise<void> {
+  try {
+    const container = docker.getContainer(webContainerName);
+    const exec = await container.exec({
+      Cmd: ["chown", "-R", "www-data:www-data", "/var/www/html"],
+      AttachStdout: true,
+      AttachStderr: true,
+      User: "root",
+    });
+    await new Promise<void>((resolve, reject) => {
+      exec.start({ hijack: true, Tty: false }, (err, stream) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        if (!stream) {
+          resolve();
+          return;
+        }
+        stream.on("end", () => resolve());
+        stream.on("error", reject);
+      });
+    });
+  } catch {
+    // Best-effort; entrypoint also adjusts permissions on container start
+  }
 }

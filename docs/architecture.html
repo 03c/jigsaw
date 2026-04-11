@@ -38,8 +38,11 @@
         <h1>Architecture</h1>
         <p class="lead">
           Traffic enters through Traefik on ports 80 and 443. The panel and Keycloak share PostgreSQL. Each hosted site
-          can run Nginx + PHP-FPM, an optional MariaDB (and optional WordPress files provisioned by the panel), and
-          optional SFTP — each on an isolated bridge network.
+          runs in Docker: a <strong>web</strong> container (generic PHP stack or the dedicated WordPress image), an
+          optional <strong>MariaDB</strong> container, and optional <strong>SFTP</strong> — each stack on an isolated
+          bridge network. WordPress sites use image <code>jigsaw-wordpress:&lt;version&gt;</code> (extends the PHP image
+          with baked WordPress core); customer files are still bind-mounted from the host under
+          <code>/home/.../public_html</code>.
         </p>
 
         <h2>High-level diagram</h2>
@@ -52,7 +55,7 @@ Internet
    |-- auth.PANEL_DOMAIN     → Keycloak (OIDC)
    |-- traefik.PANEL_DOMAIN  → Traefik API (OAuth2 Proxy + Keycloak)
    |
-   +-- customer site hostnames → per-site web (Nginx + PHP) on traefik_public + site network
+   +-- customer site hostnames → per-site web (Nginx + PHP, or WordPress image) on traefik_public + site network
 
 Internal:
    PostgreSQL 17 — panel DB + Keycloak DB

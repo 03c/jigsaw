@@ -19,6 +19,7 @@ REPO_URL="https://github.com/03c/jigsaw.git"
 INSTALL_DIR="/opt/jigsaw"
 PANEL_IMAGE="ghcr.io/03c/jigsaw/panel:latest"
 PHP_IMAGE="ghcr.io/03c/jigsaw/php:8.4"
+WORDPRESS_IMAGE="ghcr.io/03c/jigsaw/wordpress:8.4"
 SKIP_DNS_CHECK="${SKIP_DNS_CHECK:-0}"
 
 EXISTING_POSTGRES_PASSWORD=""
@@ -372,6 +373,7 @@ OAUTH2_PROXY_COOKIE_SECRET=${OAUTH2_PROXY_COOKIE_SECRET}
 
 # Site defaults
 SITE_WEB_IMAGE_TEMPLATE=jigsaw-php:{phpVersion}
+SITE_WORDPRESS_IMAGE_TEMPLATE=jigsaw-wordpress:{phpVersion}
 SITE_DB_IMAGE=mariadb:lts
 SITE_SFTP_IMAGE=atmoz/sftp
 SITES_BASE_PATH_HOST=/home
@@ -432,11 +434,20 @@ fi
 
 if docker pull "$PHP_IMAGE" >/dev/null; then
   docker tag "$PHP_IMAGE" jigsaw-php:8.4
-  ok "Site image pulled: $PHP_IMAGE"
+  ok "PHP site image pulled: $PHP_IMAGE"
 else
-  warn "Failed to pull site image ($PHP_IMAGE), building locally instead..."
+  warn "Failed to pull PHP site image ($PHP_IMAGE), building locally instead..."
   docker build -t jigsaw-php:8.4 docker/templates/web/ -q
-  ok "Site image built locally: jigsaw-php:8.4"
+  ok "PHP site image built locally: jigsaw-php:8.4"
+fi
+
+if docker pull "$WORDPRESS_IMAGE" >/dev/null; then
+  docker tag "$WORDPRESS_IMAGE" jigsaw-wordpress:8.4
+  ok "WordPress site image pulled: $WORDPRESS_IMAGE"
+else
+  warn "Failed to pull WordPress image ($WORDPRESS_IMAGE), building locally from jigsaw-php:8.4..."
+  docker build -f docker/templates/wordpress/Dockerfile --build-arg BASE_IMAGE=jigsaw-php:8.4 -t jigsaw-wordpress:8.4 . -q
+  ok "WordPress site image built locally: jigsaw-wordpress:8.4"
 fi
 
 # ---------------------------------------------------------------------------

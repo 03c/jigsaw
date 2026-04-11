@@ -5,6 +5,7 @@ import {
   resolveDbImage,
   resolveSftpImage,
   resolveWebImage,
+  resolveWordPressImage,
 } from "~/lib/images.server";
 
 function createDockerClient(): Docker {
@@ -42,6 +43,8 @@ export interface SiteContainerConfig {
   dbUser: string;
   dbPassword: string;
   dbRootPassword: string;
+  /** When true, use the WordPress image (Nginx + PHP + baked WP core) */
+  wordPress?: boolean;
 }
 
 function getSitePaths(ownerSegment: string, slug: string) {
@@ -86,28 +89,40 @@ export async function createWebContainer(
   // Ensure webroot directory exists and has a default index.html
   await fs.mkdir(sitePaths.panelWebRoot, { recursive: true });
   const indexPath = path.join(sitePaths.panelWebRoot, "index.html");
+  const wpCoreMarker = path.join(sitePaths.panelWebRoot, "wp-settings.php");
+  let hasWpCore = false;
+  try {
+    await fs.access(wpCoreMarker);
+    hasWpCore = true;
+  } catch {
+    hasWpCore = false;
+  }
   try {
     await fs.access(indexPath);
   } catch {
-    const siteTemplate = await fs.readFile(siteTemplatePath, "utf-8");
-    const rendered = siteTemplate
-      .replaceAll("{{DOMAIN}}", config.domain)
-      .replaceAll("{{SITE_SLUG}}", config.slug)
-      .replaceAll("{{OWNER_SEGMENT}}", config.ownerSegment)
-      .replaceAll(
-        "{{SITE_PATH}}",
-        `/home/${config.ownerSegment}/${config.slug}/public_html`
-      );
+    if (config.wordPress || hasWpCore) {
+      // WordPress uses index.php; do not drop a static placeholder on top
+    } else {
+      const siteTemplate = await fs.readFile(siteTemplatePath, "utf-8");
+      const rendered = siteTemplate
+        .replaceAll("{{DOMAIN}}", config.domain)
+        .replaceAll("{{SITE_SLUG}}", config.slug)
+        .replaceAll("{{OWNER_SEGMENT}}", config.ownerSegment)
+        .replaceAll(
+          "{{SITE_PATH}}",
+          `/home/${config.ownerSegment}/${config.slug}/public_html`
+        );
 
-    await fs.writeFile(
-      indexPath,
-      rendered,
-      "utf-8"
-    );
+      await fs.writeFile(indexPath, rendered, "utf-8");
+    }
   }
 
+  const webImage = config.wordPress
+    ? resolveWordPressImage(config.phpVersion)
+    : resolveWebImage(config.phpVersion);
+
   const container = await docker.createContainer({
-    Image: resolveWebImage(config.phpVersion),
+    Image: webImage,
     name: containerName,
     Hostname: containerName,
     Env: [

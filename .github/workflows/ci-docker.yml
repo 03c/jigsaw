@@ -27,6 +27,11 @@ jobs:
           dockerfile: docker/templates/web/Dockerfile
           failure-threshold: error
 
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/templates/wordpress/Dockerfile
+          failure-threshold: error
+
   trivy:
     runs-on: ubuntu-latest
     steps:
@@ -78,3 +83,33 @@ jobs:
 
       - name: Image exists
         run: docker image inspect jigsaw-php:ci
+
+  build-wordpress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build PHP base (for WordPress image)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/templates/web
+          file: ./docker/templates/web/Dockerfile
+          push: false
+          load: true
+          tags: jigsaw-php:ci
+
+      - name: Build WordPress site image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/templates/wordpress/Dockerfile
+          build-args: |
+            BASE_IMAGE=jigsaw-php:ci
+          push: false
+          load: true
+          tags: jigsaw-wordpress:ci
+
+      - name: Image exists
+        run: docker image inspect jigsaw-wordpress:ci
