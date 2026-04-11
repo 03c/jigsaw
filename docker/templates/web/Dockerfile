@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libcurl4-openssl-dev \
     libonig-dev \
+    libicu-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         mysqli \
@@ -17,6 +18,7 @@ RUN apt-get update && apt-get install -y \
         zip \
         mbstring \
         curl \
+        intl \
         xml \
         opcache \
     && apt-get clean \
@@ -50,10 +52,16 @@ RUN apk add --no-cache \
     libxml2 \
     libcurl \
     oniguruma \
+    icu-libs \
+    icu-data-full \
     supervisor
 
 # Nginx config
 COPY default.conf /etc/nginx/conf.d/default.conf
+
+# Fix permissions on mounted volumes (WordPress and uploads)
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Supervisor to run both Nginx and PHP-FPM
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -65,4 +73,5 @@ WORKDIR /var/www/html
 
 EXPOSE 80
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

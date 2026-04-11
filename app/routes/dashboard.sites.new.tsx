@@ -17,6 +17,8 @@ import {
   createSftpContainer,
   findAvailableSftpPort,
 } from "~/lib/docker.server";
+import path from "node:path";
+import { waitForMysqlHost, installWordPressFiles } from "~/lib/wordpress.server";
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
@@ -32,11 +34,16 @@ export async function action({ request }: { request: Request }) {
   const phpVersion = (formData.get("phpVersion") as string) || "8.4";
   const createDatabase = formData.get("createDatabase") === "on";
   const enableSftp = formData.get("enableSftp") === "on";
+  const installWordPress = formData.get("installWordPress") === "on";
 
   // Validation
   const errors: Record<string, string> = {};
   if (!name || name.length < 2) errors.name = "Site name must be at least 2 characters";
   if (!domain || !domain.includes(".")) errors.domain = "Please enter a valid domain";
+  if (installWordPress && !createDatabase) {
+    errors.installWordPress =
+      "WordPress needs a database. Enable “Create database” or turn off “Install WordPress”.";
+  }
 
   if (Object.keys(errors).length > 0) {
     return { errors };
@@ -90,6 +97,9 @@ export async function action({ request }: { request: Request }) {
     // Create Docker network
     await createSiteNetwork(slug);
 
+    const SITES_BASE_PATH_PANEL = process.env.SITES_BASE_PATH_PANEL || "/host-home";
+    const panelWebRoot = path.join(SITES_BASE_PATH_PANEL, ownerSegment, slug, "public_html");
+
     if (createDatabase) {
       // Create database container
       const dbContainerId = await createDbContainer({
@@ -119,6 +129,17 @@ export async function action({ request }: { request: Request }) {
           port: 3306,
         },
       });
+
+      if (installWordPress) {
+        await waitForMysqlHost(`jigsaw_${slug}_db`, 3306);
+        await installWordPressFiles({
+          panelWebRoot,
+          dbHost: `jigsaw_${slug}_db`,
+          dbName,
+          dbUser,
+          dbPassword,
+        });
+      }
     }
 
     // Create web container
@@ -227,6 +248,10 @@ export default function NewSite() {
         Set up a new website with flexible services and one-click SSL.
       </p>
 
+      {actionData?.errors?.installWordPress && (
+        <p className="text-sm text-red-600 mb-4">{actionData.errors.installWordPress}</p>
+      )}
+
       <Form method="post" className="space-y-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
           {/* Site Name */}
@@ -312,6 +337,23 @@ export default function NewSite() {
             <label className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
+                id="installWordPress"
+                name="installWordPress"
+                defaultChecked
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                <span className="font-medium text-gray-900 dark:text-white">Install WordPress</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  Downloads WordPress and writes wp-config.php. After creation, open your domain to finish the five-minute
+                  install wizard.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
                 id="enableSftp"
                 name="enableSftp"
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -335,6 +377,7 @@ export default function NewSite() {
             <li>- Isolated Docker network</li>
             <li>- Web server (Nginx + PHP-FPM)</li>
             <li>- Optional MariaDB database</li>
+            <li>- Optional WordPress (with database enabled)</li>
             <li>- Optional SFTP file access</li>
             <li>- Site files under /home/&lt;user&gt;/&lt;site&gt;/public_html</li>
             <li>- SSL certificate (via Let's Encrypt)</li>

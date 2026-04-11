@@ -38,7 +38,8 @@
         <h1>Architecture</h1>
         <p class="lead">
           Traffic enters through Traefik on ports 80 and 443. The panel and Keycloak share PostgreSQL. Each hosted site
-          can run Nginx + PHP-FPM, an optional MariaDB, and optional SFTP — each on an isolated bridge network.
+          can run Nginx + PHP-FPM, an optional MariaDB (and optional WordPress files provisioned by the panel), and
+          optional SFTP — each on an isolated bridge network.
         </p>
 
         <h2>High-level diagram</h2>
