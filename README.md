@@ -364,7 +364,7 @@ jigsaw/
 │   └── prepare-dev-realm.mjs      # Generates dev realm JSON from template + .env.local
 ├── .github/
 │   └── workflows/
-│       └── docker-publish.yml     # CI: builds and pushes panel, PHP, and WordPress images (GHCR; optional Docker Hub)
+│       └── docker-publish.yml     # CI: builds and pushes panel, PHP, and WordPress images to GHCR
 ├── Dockerfile                     # Multi-stage build for the panel (Node 22 Alpine)
 ├── docker-compose.yml             # Production: Traefik + OAuth2 Proxy + PostgreSQL + Keycloak + Panel
 ├── docker-compose.local.yml       # Local dev: PostgreSQL + Keycloak only
@@ -515,8 +515,6 @@ The CI workflow (`.github/workflows/docker-publish.yml`) automatically builds an
 | `ghcr.io/03c/jigsaw/panel` | `./Dockerfile` | `latest` (main branch), `v*` (tags), `sha-*` |
 | `ghcr.io/03c/jigsaw/php` | `./docker/templates/web/Dockerfile` | `8.4`, `sha-*` |
 | `ghcr.io/03c/jigsaw/wordpress` | `./docker/templates/wordpress/Dockerfile` (build-arg `BASE_IMAGE` = published `php:8.4`) | `8.4`, `sha-*` |
-
-The same tags can be mirrored to **Docker Hub** (`docker.io/03c/jigsaw/...`) by setting repository variable `PUBLISH_DOCKERHUB=true` and secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` on the repo (see `.github/workflows/docker-publish.yml`).
 
 ### Manual Build and Push
 

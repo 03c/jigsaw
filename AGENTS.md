@@ -132,12 +132,12 @@ Four tables defined in `app/models/schema.ts`:
 **Publish** (`.github/workflows/docker-publish.yml`):
 
 - **Triggers:** push to `main`, version tags (`v*`), manual `workflow_dispatch`
-- **Registry:** GHCR (`ghcr.io/03c/jigsaw`); optional mirror to Docker Hub (`docker.io/03c/jigsaw`) when repo variable `PUBLISH_DOCKERHUB=true` and Docker Hub secrets are set
+- **Registry:** GHCR (`ghcr.io/03c/jigsaw`)
 - **Images built:**
  - `panel` from root `Dockerfile` (tagged `latest` on main, tag refs, SHA)
  - `php` from `docker/templates/web/Dockerfile` (tagged `8.4`, SHA)
  - `wordpress` from `docker/templates/wordpress/Dockerfile` with `BASE_IMAGE` = published `php:8.4` (tagged `8.4`, SHA)
-- **Auth:** `GITHUB_TOKEN` with `packages: write` permission; Docker Hub uses `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`
+- **Auth:** `GITHUB_TOKEN` with `packages: write` permission
 
 ## Environment Variables
 
