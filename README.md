@@ -361,13 +361,15 @@ jigsaw/
 ├── keycloak/
 │   └── jigsaw-realm.json          # Realm template with roles, client, placeholders
 ├── scripts/
-│   └── prepare-dev-realm.mjs      # Generates dev realm JSON from template + .env.local
+│   ├── prepare-dev-realm.mjs      # Generates dev realm JSON (optional .env.local overrides)
+│   ├── dev-compose.mjs            # docker compose wrapper: --env-file .env.local when present
+│   └── dev-preflight.mjs          # Used by npm run dev: Docker up, wait for Keycloak, db:push
 ├── .github/
 │   └── workflows/
 │       └── docker-publish.yml     # CI: builds and pushes panel, PHP, and WordPress images to GHCR
 ├── Dockerfile                     # Multi-stage build for the panel (Node 22 Alpine)
 ├── docker-compose.yml             # Production: Traefik + OAuth2 Proxy + PostgreSQL + Keycloak + Panel
-├── docker-compose.local.yml       # Local dev: PostgreSQL + Keycloak only
+├── docker-compose.dev.yml         # Local dev + CI E2E: Postgres + Keycloak; `--profile e2e` adds panel container
 ├── drizzle.config.ts              # Drizzle Kit config (schema path, DB URL)
 ├── install.sh                     # Interactive production installer
 ├── .env.example                   # Production environment template
@@ -396,47 +398,52 @@ jigsaw/
 
 ## Development
 
-For a fast local dev loop, run the app on your host with HMR and only run backing services (PostgreSQL + Keycloak) in Docker.
+For local development, run the app on your host with Vite HMR and PostgreSQL + Keycloak in Docker. **You do not need to create `.env.local`** — defaults match `docker-compose.dev.yml` and the app’s built-in fallbacks. Optionally copy `.env.local.example` to `.env.local` to override URLs, secrets, or Docker paths.
 
 ### Prerequisites
 
-- Node.js 22+
-- Docker and Docker Compose
-- npm (included with Node.js)
+- **Node.js 22+** and **npm** (required to install dependencies and run the dev server)
+- **Docker** and **Docker Compose** (required for PostgreSQL, Keycloak, and site container management)
 
-### Quick Start
+### Quick start (minimal steps)
 
 ```bash
-# Install dependencies
+git clone https://github.com/03c/jigsaw.git
+cd jigsaw
 npm install
-
-# Create local env file (only needed on first setup)
-cp .env.local.example .env.local
-
-# Bootstrap: starts PostgreSQL + Keycloak in Docker, then pushes the DB schema
-npm run dev:bootstrap
-
-# Start the dev server with HMR
 npm run dev
 ```
 
-The app runs at `http://localhost:5173` and Keycloak at `http://localhost:8080`.
+`npm run dev` will:
+
+1. Generate the dev Keycloak realm (`keycloak/jigsaw-realm.dev.json`) using `scripts/prepare-dev-realm.mjs` (optional `.env.local`; defaults: `PANEL_DOMAIN=localhost:5173`, `JIGSAW_ADMIN_EMAIL=admin@localhost`, `KEYCLOAK_CLIENT_SECRET` / `KEYCLOAK_ADMIN_PASSWORD` as in `.env.local.example`)
+2. Start PostgreSQL and Keycloak (`docker-compose.dev.yml`)
+3. Wait until Keycloak’s OIDC endpoint responds
+4. Run `drizzle-kit push` so the panel database schema exists
+5. Start the Vite + React Router dev server at `http://localhost:5173`
+
+Keycloak is at `http://localhost:8080`. The first boot can take **15–30 seconds** after containers start.
+
+**UI-only / no Docker:** set `SKIP_DEV_SERVICES=1 npm run dev` to skip steps 1–4 and only run the app (login and DB-backed features will not work).
+
+**Override settings:** create `.env.local` (optional). If present, it is loaded for `npm run dev`, for `prepare-dev-realm.mjs`, and passed to Docker Compose via `scripts/dev-compose.mjs` when you run `dev:services:*` or when the preflight starts the stack.
 
 ### Default Local Credentials
 
 | Service | Username | Password |
 |---------|----------|----------|
-| Keycloak admin console | `admin` | `admin` (change in `.env.local`) |
+| Keycloak admin console | `admin` | `admin` (override with `KEYCLOAK_ADMIN_PASSWORD` in `.env.local` if you set one) |
 
 ### npm Scripts
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Start Vite dev server with HMR (port 5173) |
+| `npm run dev` | Start local Docker services if needed, wait for Keycloak, `db:push`, then Vite + HMR (port 5173) |
+| `npm run dev:app` | Vite + HMR only (use when services are already running and schema is applied) |
 | `npm run build` | Production build (output in `build/`) |
 | `npm run start` | Serve production build (port 3000) |
 | `npm run typecheck` | Run `react-router typegen` then `tsc` |
-| `npm run dev:bootstrap` | Start local services + push DB schema (combines `dev:services:up` + `db:push`) |
+| `npm run dev:bootstrap` | Same as `dev:services:up` then `db:push` (use if you started services separately from `npm run dev`) |
 | `npm run dev:services:up` | Start PostgreSQL + Keycloak via Docker Compose |
 | `npm run dev:services:down` | Stop local services |
 | `npm run dev:services:logs` | Tail local service logs |
@@ -448,19 +455,15 @@ The app runs at `http://localhost:5173` and Keycloak at `http://localhost:8080`.
 
 ### How Local Dev Works
 
-1. `npm run dev:realm` reads `.env.local` and generates `keycloak/jigsaw-realm.dev.json` from the template `keycloak/jigsaw-realm.json`, replacing placeholders with local dev values
-2. `docker-compose.local.yml` starts PostgreSQL and Keycloak with the dev realm file bind-mounted
+1. `prepare-dev-realm.mjs` builds `keycloak/jigsaw-realm.dev.json` from `keycloak/jigsaw-realm.json`, using optional `.env.local` and otherwise the defaults documented in `.env.local.example` (see commented `PANEL_DOMAIN` / `JIGSAW_ADMIN_EMAIL` / `KEYCLOAK_ADMIN_PASSWORD`)
+2. `docker-compose.dev.yml` starts PostgreSQL and Keycloak with the dev realm file bind-mounted (CI E2E adds the panel via `--profile e2e`)
 3. Keycloak imports the realm on first boot (takes 15-30 seconds to initialize)
 4. The Vite dev server runs the React Router app with SSR, connecting to the local PostgreSQL and Keycloak instances
 5. The app communicates with Docker via the host socket for container orchestration
 
 ### PowerShell (Windows)
 
-```powershell
-Copy-Item .env.local.example .env.local
-```
-
-If using Docker Desktop on Windows, uncomment `DOCKER_SOCKET_PATH=//./pipe/docker_engine` in `.env.local`.
+If Docker Desktop cannot reach the engine from Node, set `DOCKER_SOCKET_PATH=//./pipe/docker_engine` in an optional `.env.local` file (see `.env.local.example`).
 
 ### Full-Stack Parity
 

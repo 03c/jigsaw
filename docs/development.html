@@ -48,19 +48,36 @@
           <li>Docker and Docker Compose</li>
         </ul>
 
-        <h2>Bootstrap</h2>
+        <h2>Quick start</h2>
+        <p>
+          You only need <strong>Node.js 22+</strong>, <strong>npm</strong>, and <strong>Docker with Compose</strong>. No
+          <code>.env.local</code> file is required — defaults match the local compose file and the app’s fallbacks.
+        </p>
         <pre><code>git clone https://github.com/03c/jigsaw.git
 cd jigsaw
 npm install
-cp .env.local.example .env.local
-npm run dev:bootstrap</code></pre>
+npm run dev</code></pre>
         <p>
-          <code>dev:bootstrap</code> starts services from <code>docker-compose.local.yml</code>, regenerates the dev
-          Keycloak realm from <code>.env.local</code>, and runs <code>drizzle-kit push</code> against your local DB.
+          <code>npm run dev</code> regenerates the dev Keycloak realm, starts PostgreSQL + Keycloak via
+          <code>docker-compose.dev.yml</code>, waits until Keycloak’s OIDC endpoint responds, runs
+          <code>drizzle-kit push</code>, then starts Vite with HMR.
+        </p>
+        <div class="note">
+          Set <code>SKIP_DEV_SERVICES=1</code> before <code>npm run dev</code> to only run the app (no Docker) — useful
+          for UI-only work; login and database features need the stack.
+        </div>
+
+        <h2>Optional: <code>.env.local</code></h2>
+        <p>
+          Copy <a href="https://github.com/03c/jigsaw/blob/main/.env.local.example">.env.local.example</a> to
+          <code>.env.local</code> when you need to override URLs, secrets, or (on Windows) the Docker socket path. If the
+          file exists, it is loaded for <code>npm run dev</code>, realm generation, and passed to Docker Compose (via
+          <code>scripts/dev-compose.mjs</code>) for <code>dev:services:*</code>.
         </p>
 
-        <h2>Dev server</h2>
-        <pre><code>npm run dev</code></pre>
+        <h2>Dev server only</h2>
+        <p>If containers are already running and the schema is applied:</p>
+        <pre><code>npm run dev:app</code></pre>
         <p>Application: <code>http://localhost:5173</code> · Keycloak: <code>http://localhost:8080</code></p>
         <div class="note">
           Keycloak can take 15–30 seconds after containers start. Until the realm endpoint responds, login redirects may
@@ -79,7 +96,11 @@ npm run dev:bootstrap</code></pre>
           <tbody>
             <tr>
               <td><code>npm run dev</code></td>
-              <td>Vite + React Router dev server (HMR)</td>
+              <td>Local Docker services, wait for Keycloak, <code>db:push</code>, then Vite + HMR</td>
+            </tr>
+            <tr>
+              <td><code>npm run dev:app</code></td>
+              <td>Vite + HMR only (services must already be up)</td>
             </tr>
             <tr>
               <td><code>npm run build</code></td>
@@ -110,8 +131,14 @@ npm run dev:bootstrap</code></pre>
 
         <h2>Windows (Docker Desktop)</h2>
         <p>
-          Copy <code>.env.local.example</code> to <code>.env.local</code>. If needed, set
-          <code>DOCKER_SOCKET_PATH=//./pipe/docker_engine</code> for the Docker API.
+          If the app cannot talk to Docker, create <code>.env.local</code> and set
+          <code>DOCKER_SOCKET_PATH=//./pipe/docker_engine</code> (see <code>.env.local.example</code>).
+        </p>
+
+        <h2>CI E2E (same compose file)</h2>
+        <p>
+          GitHub Actions E2E uses the same <code>docker-compose.dev.yml</code> with
+          <code>--profile e2e</code> to also build and run the panel container on port 3000 for Playwright.
         </p>
 
         <h2>Further reading</h2>

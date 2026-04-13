@@ -34,7 +34,7 @@ jobs:
         run: npm run dev:realm
 
       - name: Start stack (PostgreSQL, Keycloak, panel)
-        run: docker compose -f docker-compose.ci.yml up -d --build
+        run: docker compose -f docker-compose.dev.yml --profile e2e up -d --build
 
       - name: Wait for Keycloak OIDC
         run: |
@@ -50,7 +50,7 @@ jobs:
           exit 1
 
       - name: Push Drizzle schema to PostgreSQL
-        run: docker compose -f docker-compose.ci.yml exec -T jigsaw npm run db:push
+        run: docker compose -f docker-compose.dev.yml exec -T jigsaw npm run db:push
 
       - name: Wait for panel HTTP
         run: |
@@ -62,7 +62,7 @@ jobs:
             echo "waiting for panel ($i)..."
             sleep 3
           done
-          docker compose -f docker-compose.ci.yml logs --no-color
+          docker compose -f docker-compose.dev.yml logs --no-color
           exit 1
 
       - name: Install Playwright browsers
@@ -82,4 +82,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: docker compose -f docker-compose.ci.yml down -v
+        run: docker compose -f docker-compose.dev.yml --profile e2e down -v

@@ -11,11 +11,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium",
-    "dev": "react-router dev",
+    "dev": "node ./scripts/dev-preflight.mjs",
+    "dev:app": "react-router dev",
     "dev:realm": "node ./scripts/prepare-dev-realm.mjs",
-    "dev:services:up": "npm run dev:realm && docker compose --env-file .env.local -f docker-compose.local.yml up -d",
-    "dev:services:down": "docker compose --env-file .env.local -f docker-compose.local.yml down",
-    "dev:services:logs": "docker compose --env-file .env.local -f docker-compose.local.yml logs -f",
+    "dev:services:up": "npm run dev:realm && node ./scripts/dev-compose.mjs up -d",
+    "dev:services:down": "node ./scripts/dev-compose.mjs down",
+    "dev:services:logs": "node ./scripts/dev-compose.mjs logs -f",
     "dev:bootstrap": "npm run dev:services:up && npm run db:push",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
@@ -29,7 +30,7 @@
     "@react-router/serve": "7.12.0",
     "dockerode": "^4.0.9",
     "drizzle-kit": "^0.31.9",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "isbot": "^5.1.31",
     "openid-client": "^6.8.2",
     "postgres": "^3.4.8",
@@ -38,6 +39,9 @@
     "react-router": "7.12.0",
     "systeminformation": "^5.31.1",
     "uuid": "^13.0.0"
+  },
+  "overrides": {
+    "esbuild": "0.25.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
