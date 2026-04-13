@@ -90,8 +90,8 @@ async function main() {
   console.log("Preparing dev Keycloak realm…");
   run(process.execPath, [path.join(root, "scripts", "prepare-dev-realm.mjs")]);
 
-  console.log("Starting PostgreSQL + Keycloak (docker-compose.local.yml)…");
-  run("docker", ["compose", "-f", "docker-compose.local.yml", "up", "-d"]);
+  console.log("Starting PostgreSQL + Keycloak (docker-compose.dev.yml)…");
+  run("docker", ["compose", "-f", "docker-compose.dev.yml", "up", "-d"]);
 
   await waitForKeycloakReady();
 

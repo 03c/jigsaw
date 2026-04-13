@@ -27,7 +27,7 @@ See `README.md` for full user-facing docs, architecture, and configuration refer
 1. `npm install` -- install dependencies
 2. `npm run dev` -- starts PostgreSQL + Keycloak in Docker (if needed), waits for Keycloak, runs `db:push`, then the dev server at http://localhost:5173
 
-No `.env.local` file is required; defaults match `docker-compose.local.yml`. Copy `.env.local.example` to `.env.local` only when you need overrides (Windows Docker socket path, custom URLs, etc.).
+No `.env.local` file is required; defaults match `docker-compose.dev.yml`. Copy `.env.local.example` to `.env.local` only when you need overrides (Windows Docker socket path, custom URLs, etc.).
 
 ### Day-to-Day
 
@@ -39,7 +39,7 @@ No `.env.local` file is required; defaults match `docker-compose.local.yml`. Cop
 
 | Service | How to start | Port | Notes |
 |---------|-------------|------|-------|
-| PostgreSQL + Keycloak | `npm run dev:services:up` | 5432, 8080 | Docker Compose via `docker-compose.local.yml` |
+| PostgreSQL + Keycloak | `npm run dev:services:up` | 5432, 8080 | Docker Compose via `docker-compose.dev.yml` |
 | Dev server (Vite HMR) | `npm run dev` | 5173 | React Router 7 dev mode with SSR |
 | Drizzle Studio | `npm run db:studio` | 4983 (default) | Database GUI |
 
@@ -156,7 +156,7 @@ See `README.md` → **Configuration Reference** for the full variable table.
 - Keycloak 26 (OIDC provider)
 - Jigsaw panel (Node.js, port 3000)
 
-**Local dev stack** (`docker-compose.local.yml`):
+**Local dev stack** (`docker-compose.dev.yml`):
 - PostgreSQL 17 Alpine (port 5432)
 - Keycloak 26 in dev mode (port 8080)
 

@@ -59,7 +59,7 @@ npm install
 npm run dev</code></pre>
         <p>
           <code>npm run dev</code> regenerates the dev Keycloak realm, starts PostgreSQL + Keycloak via
-          <code>docker-compose.local.yml</code>, waits until Keycloak’s OIDC endpoint responds, runs
+          <code>docker-compose.dev.yml</code>, waits until Keycloak’s OIDC endpoint responds, runs
           <code>drizzle-kit push</code>, then starts Vite with HMR.
         </p>
         <div class="note">
@@ -132,6 +132,12 @@ npm run dev</code></pre>
         <p>
           If the app cannot talk to Docker, create <code>.env.local</code> and set
           <code>DOCKER_SOCKET_PATH=//./pipe/docker_engine</code> (see <code>.env.local.example</code>).
+        </p>
+
+        <h2>CI E2E (same compose file)</h2>
+        <p>
+          GitHub Actions E2E uses the same <code>docker-compose.dev.yml</code> with
+          <code>--profile e2e</code> to also build and run the panel container on port 3000 for Playwright.
         </p>
 
         <h2>Further reading</h2>
