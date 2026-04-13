@@ -362,6 +362,7 @@ jigsaw/
 │   └── jigsaw-realm.json          # Realm template with roles, client, placeholders
 ├── scripts/
 │   ├── prepare-dev-realm.mjs      # Generates dev realm JSON (optional .env.local overrides)
+│   ├── dev-compose.mjs            # docker compose wrapper: --env-file .env.local when present
 │   └── dev-preflight.mjs          # Used by npm run dev: Docker up, wait for Keycloak, db:push
 ├── .github/
 │   └── workflows/
@@ -415,7 +416,7 @@ npm run dev
 
 `npm run dev` will:
 
-1. Generate the dev Keycloak realm (`keycloak/jigsaw-realm.dev.json`) with the same defaults as `.env.local.example`
+1. Generate the dev Keycloak realm (`keycloak/jigsaw-realm.dev.json`) using `scripts/prepare-dev-realm.mjs` (optional `.env.local`; defaults: `PANEL_DOMAIN=localhost:5173`, `JIGSAW_ADMIN_EMAIL=admin@localhost`, `KEYCLOAK_CLIENT_SECRET` / `KEYCLOAK_ADMIN_PASSWORD` as in `.env.local.example`)
 2. Start PostgreSQL and Keycloak (`docker-compose.dev.yml`)
 3. Wait until Keycloak’s OIDC endpoint responds
 4. Run `drizzle-kit push` so the panel database schema exists
@@ -425,7 +426,7 @@ Keycloak is at `http://localhost:8080`. The first boot can take **15–30 second
 
 **UI-only / no Docker:** set `SKIP_DEV_SERVICES=1 npm run dev` to skip steps 1–4 and only run the app (login and DB-backed features will not work).
 
-**Override settings:** create `.env.local` (optional). If present, it is loaded for `npm run dev` and for `scripts/prepare-dev-realm.mjs` when you run `dev:services:*` or `dev:realm`.
+**Override settings:** create `.env.local` (optional). If present, it is loaded for `npm run dev`, for `prepare-dev-realm.mjs`, and passed to Docker Compose via `scripts/dev-compose.mjs` when you run `dev:services:*` or when the preflight starts the stack.
 
 ### Default Local Credentials
 
@@ -454,7 +455,7 @@ Keycloak is at `http://localhost:8080`. The first boot can take **15–30 second
 
 ### How Local Dev Works
 
-1. `prepare-dev-realm.mjs` builds `keycloak/jigsaw-realm.dev.json` from `keycloak/jigsaw-realm.json`, using optional `.env.local` and otherwise the same defaults as `.env.local.example`
+1. `prepare-dev-realm.mjs` builds `keycloak/jigsaw-realm.dev.json` from `keycloak/jigsaw-realm.json`, using optional `.env.local` and otherwise the defaults documented in `.env.local.example` (see commented `PANEL_DOMAIN` / `JIGSAW_ADMIN_EMAIL` / `KEYCLOAK_ADMIN_PASSWORD`)
 2. `docker-compose.dev.yml` starts PostgreSQL and Keycloak with the dev realm file bind-mounted (CI E2E adds the panel via `--profile e2e`)
 3. Keycloak imports the realm on first boot (takes 15-30 seconds to initialize)
 4. The Vite dev server runs the React Router app with SSR, connecting to the local PostgreSQL and Keycloak instances

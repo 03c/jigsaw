@@ -71,7 +71,8 @@ npm run dev</code></pre>
         <p>
           Copy <a href="https://github.com/03c/jigsaw/blob/main/.env.local.example">.env.local.example</a> to
           <code>.env.local</code> when you need to override URLs, secrets, or (on Windows) the Docker socket path. If the
-          file exists, it is loaded for <code>npm run dev</code> and realm generation.
+          file exists, it is loaded for <code>npm run dev</code>, realm generation, and passed to Docker Compose (via
+          <code>scripts/dev-compose.mjs</code>) for <code>dev:services:*</code>.
         </p>
 
         <h2>Dev server only</h2>

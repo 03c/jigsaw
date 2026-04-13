@@ -24,13 +24,25 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+const FETCH_TIMEOUT_MS = 5000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function waitForKeycloakReady() {
   const url = "http://localhost:8080/realms/jigsaw/.well-known/openid-configuration";
   const maxAttempts = 90;
   const delayMs = 2000;
   for (let i = 1; i <= maxAttempts; i++) {
     try {
-      const res = await fetch(url, { redirect: "manual" });
+      const res = await fetchWithTimeout(url, { redirect: "manual" });
       if (res.ok) {
         console.log("Keycloak OIDC endpoint is ready.");
         return;
@@ -65,9 +77,18 @@ function runDevServer() {
   const child = spawn("npx", ["react-router", "dev"], {
     cwd: root,
     stdio: "inherit",
-    shell: true,
+    shell: process.platform === "win32",
   });
+  const forward = (sig) => {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill(sig);
+    }
+  };
+  process.on("SIGINT", forward);
+  process.on("SIGTERM", forward);
   child.on("exit", (code, signal) => {
+    process.removeListener("SIGINT", forward);
+    process.removeListener("SIGTERM", forward);
     if (signal) process.kill(process.pid, signal);
     else process.exit(code ?? 0);
   });
@@ -91,7 +112,7 @@ async function main() {
   run(process.execPath, [path.join(root, "scripts", "prepare-dev-realm.mjs")]);
 
   console.log("Starting PostgreSQL + Keycloak (docker-compose.dev.yml)…");
-  run("docker", ["compose", "-f", "docker-compose.dev.yml", "up", "-d"]);
+  run(process.execPath, [path.join(root, "scripts", "dev-compose.mjs"), "up", "-d"]);
 
   await waitForKeycloakReady();
 
