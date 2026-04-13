@@ -20,10 +20,10 @@ Thanks for your interest in contributing to Jigsaw! This document covers the con
 
 ```bash
 npm install
-cp .env.local.example .env.local
-npm run dev:bootstrap
 npm run dev
 ```
+
+`npm run dev` starts Docker services (PostgreSQL + Keycloak), waits for Keycloak, applies the DB schema, then runs the Vite dev server. Copy `.env.local.example` to `.env.local` only if you need non-default settings.
 
 See [AGENTS.md](AGENTS.md) for detailed developer documentation including the route map, database schema, and project conventions.
 
@@ -72,14 +72,21 @@ Run this before submitting a PR to ensure there are no type errors.
 
 ## Testing
 
-There is currently no automated test suite. Manual testing is the workflow:
+Run Vitest and integration tests when your change touches covered code:
 
-1. Start the dev environment (`npm run dev:bootstrap && npm run dev`)
+```bash
+npm test
+npm run test:integration   # requires Docker
+```
+
+Manual testing in the browser is still important for auth and Docker flows:
+
+1. Start the dev environment (`npm run dev`)
 2. Log in via Keycloak at `http://localhost:5173`
-3. Test your changes in the browser
-4. For admin features, log in with the `admin` / `admin` credentials
+3. Exercise your change end-to-end
+4. For admin features, use the Keycloak `admin` / `admin` credentials (default local dev)
 
-Contributions that add a test framework and initial test coverage are very welcome.
+Additional test coverage is welcome.
 
 ## Database Changes
 
